@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../components/NavbarUser";
+import { fetchProducts } from "../../services/api";
 
 const USER = { name: "Budi Santoso", email: "budi@email.com", tier: "Gold Member", points: 2450 };
 
@@ -16,21 +17,6 @@ const CATEGORIES = [
 ];
 
 const SORTS = ["Terbaru", "Harga: Rendah ke Tinggi", "Harga: Tinggi ke Rendah", "Paling Populer"];
-
-const PRODUCTS = [
-  { id: 1, name: "Bouclé Armchair", cat: "kursi", price: 6400000, img: "/product-chair.png", tag: "Best Seller", rating: 4.9, new: false },
-  { id: 2, name: "Olive Linen Sofa", cat: "kursi", price: 12500000, img: "/product-sofa.png", tag: null, rating: 4.8, new: false },
-  { id: 3, name: "Velvet Accent Chair", cat: "kursi", price: 7200000, img: "/product-velvet-chair.png", tag: null, rating: 4.7, new: false },
-  { id: 4, name: "Marble Side Table", cat: "meja", price: 4800000, img: "/product-marble-table.png", tag: "Terlaris", rating: 4.9, new: false },
-  { id: 5, name: "Oak Dining Table", cat: "meja", price: 9800000, img: "/product-table.png", tag: null, rating: 4.8, new: false },
-  { id: 6, name: "Travertine Coffee Table", cat: "meja", price: 8900000, img: "/product-table.png", tag: null, rating: 4.6, new: true },
-  { id: 7, name: "Rattan Pendant Lamp", cat: "lampu", price: 2750000, img: "/product-lamp.png", tag: null, rating: 4.8, new: false },
-  { id: 8, name: "Japandi Floor Lamp", cat: "lampu", price: 1850000, img: "/product-lamp.png", tag: null, rating: 5.0, new: true },
-  { id: 9, name: "Ceramic Statement Vase", cat: "dekorasi", price: 1350000, img: "/product-ceramic-vase.png", tag: "Baru", rating: 4.9, new: true },
-  { id: 10, name: "Wabi-Sabi Vase Set", cat: "dekorasi", price: 1100000, img: "/product-ceramic-vase.png", tag: null, rating: 4.7, new: false },
-  { id: 11, name: "Rattan Wall Panel", cat: "dekorasi", price: 2100000, img: "/product-rattan-wall.png", tag: null, rating: 4.8, new: false },
-  { id: 12, name: "Linen Throw Pillow Set", cat: "dekorasi", price: 680000, img: "/product-ceramic-vase.png", tag: null, rating: 4.7, new: false },
-];
 
 function Stars({ n }: { n: number }) {
   return (
@@ -51,8 +37,24 @@ export default function KoleksiPage() {
   const [sortOpen, setSortOpen] = useState(false);
   const [hovered, setHovered] = useState<number | null>(null);
   const [wishlist, setWishlist] = useState<number[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = PRODUCTS.filter(p => activeCategory === "semua" || p.cat === activeCategory);
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        const data = await fetchProducts();
+        setProducts(data);
+      } catch (error) {
+        console.error("Failed to load products:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProducts();
+  }, []);
+
+  const filtered = products.filter(p => activeCategory === "semua" || p.category?.name.toLowerCase() === activeCategory);
 
   const formatPrice = (n: number) =>
     "Rp " + n.toLocaleString("id-ID").replace(/\./g, ".");
@@ -230,22 +232,26 @@ export default function KoleksiPage() {
           }}
           className="koleksi-grid"
         >
-          {filtered.map(item => (
-            <Link
-              key={item.id}
-              href={`/product/${item.id}`}
-              style={{ display: "block", textDecoration: "none" }}
-              onMouseEnter={() => setHovered(item.id)}
-              onMouseLeave={() => setHovered(null)}
-            >
-              <div style={{
-                background: "var(--white)",
-                border: "1px solid var(--stone-light)",
-                overflow: "hidden",
-                transition: "box-shadow 0.3s ease, transform 0.3s ease",
-                boxShadow: hovered === item.id ? "0 12px 40px rgba(42,38,32,0.12)" : "none",
-                transform: hovered === item.id ? "translateY(-4px)" : "none",
-              }}>
+          {loading ? (
+            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "4rem 0" }}>
+              <p>Loading products...</p>
+            </div>
+          ) : (
+            filtered.map(item => (
+              <Link
+                key={item.id}
+                href={`/product/${item.id}`}
+                style={{ display: "block", textDecoration: "none" }}
+                onMouseEnter={() => setHovered(item.id)}
+                onMouseLeave={() => setHovered(null)}>
+                <div style={{
+                  background: "var(--white)",
+                  border: "1px solid var(--stone-light)",
+                  overflow: "hidden",
+                  transition: "box-shadow 0.3s ease, transform 0.3s ease",
+                  boxShadow: hovered === item.id ? "0 12px 40px rgba(42,38,32,0.12)" : "none",
+                  transform: hovered === item.id ? "translateY(-4px)" : "none",
+                }}>
                 {/* Image */}
                 <div style={{ aspectRatio: "4/3", position: "relative", background: "var(--bone)", overflow: "hidden" }}>
                   <Image src={item.img} alt={item.name} fill style={{ objectFit: "cover", transition: "transform 0.5s ease", transform: hovered === item.id ? "scale(1.04)" : "scale(1)" }} />
@@ -292,10 +298,16 @@ export default function KoleksiPage() {
                         background: "var(--cream)", border: "none", color: "var(--charcoal)",
                         padding: "0.6rem 1.5rem", fontFamily: "var(--font-body)",
                         fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.14em",
-                        textTransform: "uppercase", cursor: "pointer",
+textTransform: "uppercase", cursor: "pointer",
                       }}
                     >
                       + Keranjang
+                    </button>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
                     </button>
                   </div>
                 </div>
@@ -308,11 +320,18 @@ export default function KoleksiPage() {
                     <p style={{ fontSize: "0.88rem", fontWeight: 500, color: "var(--charcoal)" }}>
                       {formatPrice(item.price)}
                     </p>
-                    <Stars n={item.rating} />
+<Stars n={item.rating} />
                   </div>
                 </div>
               </div>
             </Link>
+          ))}
+        </div>
+              </div>
+              </div>
+</Link>
+          ))))
+          ))}
           ))}
         </div>
 

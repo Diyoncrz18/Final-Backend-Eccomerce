@@ -1,10 +1,15 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../../components/NavbarUser";
+import { getMyOrders, getAuthToken } from "../../../services/api";
 
-const USER = { name: "Budi Santoso", email: "budi@email.com", tier: "Gold Member", points: 2450 };
+function getStoredUser() {
+  if (typeof window === 'undefined') return { name: "Guest", email: "", tier: "Bronze", points: 0 };
+  const saved = localStorage.getItem('user');
+  return saved ? JSON.parse(saved) : { name: "Guest", email: "", tier: "Bronze", points: 0 };
+}
 
 /* ─────────── Types ─────────── */
 type OrderStatus = "menunggu" | "dikemas" | "dikirim" | "selesai" | "dibatalkan";
@@ -16,33 +21,10 @@ interface Order {
   cancelReason?: string;
 }
 
-/* ─────────── Mock Data ─────────── */
-const ORDERS: Order[] = [
-  {
-    id: "MSN-20250418-001", date: "18 Apr 2025", status: "dikirim",
-    trackingNo: "JNE-7123456789", courier: "JNE Express", estimasi: "20–22 Apr 2025",
-    items: [
-      { id: 1, name: "Bouclé Armchair", variant: "Cream Bouclé", qty: 1, price: 6400000, img: "/product-chair.png" },
-      { id: 4, name: "Marble Side Table", variant: "White Carrara", qty: 1, price: 3360000, img: "/product-marble-table.png" },
-    ],
-    total: 9760000, shipping: 0,
-  },
-  {
-    id: "MSN-20250415-002", date: "15 Apr 2025", status: "dikemas",
-    items: [
-      { id: 2, name: "Olive Linen Sofa", variant: "Sand Linen", qty: 1, price: 12500000, img: "/product-sofa.png" },
-    ],
-    total: 12500000, shipping: 0,
-  },
-  {
-    id: "MSN-20250408-003", date: "8 Apr 2025", status: "selesai",
-    items: [
-      { id: 7, name: "Ceramic Statement Vase", variant: "Off-White", qty: 2, price: 1350000, img: "/product-ceramic-vase.png" },
-      { id: 11, name: "Rattan Wall Panel", variant: "Natural", qty: 1, price: 2100000, img: "/product-rattan-wall.png" },
-    ],
-    total: 4800000, shipping: 150000,
-  },
-  {
+/* ─────────── Default Data ─────────── */
+const ORDER_MOCK: Order[] = [];
+
+const ORDERS = ORDER_MOCK;
     id: "MSN-20250328-004", date: "28 Mar 2025", status: "selesai",
     items: [
       { id: 5, name: "Oak Dining Table", variant: "Natural Oak", qty: 1, price: 9800000, img: "/product-table.png" },
@@ -140,25 +122,63 @@ function TrackingBar({ status }: { status: OrderStatus }) {
 export default function OrdersPage() {
   const [activeFilter, setActiveFilter] = useState<"semua" | OrderStatus>("semua");
   const [expandedTracking, setExpandedTracking] = useState<string | null>(null);
+  const [orders, setOrders] = useState<Order[]>(ORDER_MOCK);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadOrders() {
+      try {
+        const token = getAuthToken();
+        if (token) {
+          const data = await getMyOrders(0, 20);
+          if (data && data.length > 0) {
+            setOrders(data.map((o: any) => ({
+              id: o.orderNumber,
+              date: new Date(o.createdAt).toLocaleDateString("id-ID"),
+              status: o.status?.toLowerCase() || "menunggu",
+              items: o.items?.map((item: any, idx: number) => ({
+                id: idx,
+                name: item.productName || "Product",
+                variant: item.variant || "-",
+                qty: item.quantity || 1,
+                price: item.price || 0,
+                img: item.productImage || "/product-chair.png"
+              })) || [],
+              total: o.total || 0,
+              shipping: o.shippingCost || 0,
+              trackingNo: o.trackingNumber,
+              courier: o.courier,
+              estimasi: o.estimatedDelivery
+            })));
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load orders:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadOrders();
+  }, []);
 
   const filters: { key: "semua" | OrderStatus; label: string; count: number }[] = [
-    { key: "semua",      label: "Semua",              count: ORDERS.length },
-    { key: "dikirim",    label: "Dikirim",             count: ORDERS.filter(o => o.status === "dikirim").length },
-    { key: "dikemas",    label: "Dikemas",             count: ORDERS.filter(o => o.status === "dikemas").length },
-    { key: "selesai",    label: "Selesai",             count: ORDERS.filter(o => o.status === "selesai").length },
-    { key: "dibatalkan", label: "Dibatalkan",          count: ORDERS.filter(o => o.status === "dibatalkan").length },
+    { key: "semua",      label: "Semua",              count: orders.length },
+    { key: "dikirim",    label: "Dikirim",             count: orders.filter(o => o.status === "dikirim").length },
+    { key: "dikemas",    label: "Dikemas",             count: orders.filter(o => o.status === "dikemas").length },
+    { key: "selesai",    label: "Selesai",             count: orders.filter(o => o.status === "selesai").length },
+    { key: "dibatalkan", label: "Dibatalkan",          count: orders.filter(o => o.status === "dibatalkan").length },
   ];
 
-  const filtered = activeFilter === "semua" ? ORDERS : ORDERS.filter(o => o.status === activeFilter);
+  const filtered = activeFilter === "semua" ? orders : orders.filter(o => o.status === activeFilter);
 
-  const totalSelesai = ORDERS.filter(o => o.status === "selesai").reduce((s, o) => s + o.total, 0);
-  const totalAktif   = ORDERS.filter(o => o.status === "dikirim" || o.status === "dikemas").length;
-  const totalDone    = ORDERS.filter(o => o.status === "selesai").length;
+  const totalSelesai = orders.filter(o => o.status === "selesai").reduce((s, o) => s + o.total, 0);
+  const totalAktif   = orders.filter(o => o.status === "dikirim" || o.status === "dikemas").length;
+  const totalDone    = orders.filter(o => o.status === "selesai").length;
 
   const STAT_CARDS = [
     {
       label: "Total Pesanan",
-      val: ORDERS.length,
+      val: orders.length,
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--copper)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
@@ -288,6 +308,10 @@ export default function OrdersPage() {
               Tidak Ada Pesanan
             </p>
             <p style={{ fontSize: "0.85rem", color: "var(--stone)" }}>Pesanan dengan status ini belum ada.</p>
+          </div>
+        ) : loading ? (
+          <div style={{ textAlign: "center", padding: "4rem 0" }}>
+            <p>Loading orders...</p>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>

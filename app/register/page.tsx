@@ -3,6 +3,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import AuthTransition from "../components/AuthTransition";
+import { register } from "../../services/api";
 
 function RegisterContent({ navigate }: { navigate: (href: string) => void }) {
   const [step, setStep] = useState<1 | 2>(1);
@@ -19,11 +20,12 @@ function RegisterContent({ navigate }: { navigate: (href: string) => void }) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
   const update = (key: keyof typeof form, val: string | boolean) =>
     setForm((prev) => ({ ...prev, [key]: val }));
 
-  // Password strength
   const strength = (() => {
     const p = form.password;
     let score = 0;
@@ -42,10 +44,30 @@ function RegisterContent({ navigate }: { navigate: (href: string) => void }) {
     setStep(2);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => setLoading(false), 2000);
+    setError("");
+
+    try {
+      const result = await register({
+        fullName: form.fullName,
+        email: form.email,
+        phone: form.phone,
+        password: form.password,
+      });
+
+      if (result.success) {
+        setSuccess(true);
+        setTimeout(() => navigate("/login"), 2000);
+      } else {
+        setError(result.message || 'Pendaftaran gagal. Silakan coba lagi.');
+      }
+    } catch (err) {
+      setError('Terjadi kesalahan. Silakan coba lagi.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const inputStyle = (name: string) => ({
@@ -238,6 +260,52 @@ function RegisterContent({ navigate }: { navigate: (href: string) => void }) {
             </button>
           </p>
         </div>
+
+        {/* Error message */}
+        {error && (
+          <div
+            style={{
+              padding: "1rem",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              color: "#dc2626",
+              fontSize: "0.85rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              marginBottom: "1.5rem",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 8v4M12 16h.01" />
+            </svg>
+            {error}
+          </div>
+        )}
+
+        {/* Success message */}
+        {success && (
+          <div
+            style={{
+              padding: "1rem",
+              background: "#f0fdf4",
+              border: "1px solid #bbf7d0",
+              color: "#16a34a",
+              fontSize: "0.85rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              marginBottom: "1.5rem",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+            Akun berhasil dibuat! Mengalihkan ke halaman masuk...
+          </div>
+        )}
 
         {/* Step 1: Personal Info */}
         {step === 1 && (

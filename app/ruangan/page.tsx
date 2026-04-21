@@ -1,73 +1,15 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../components/NavbarUser";
+import { fetchCategories, fetchProducts } from "../../services/api";
 
-const USER = { name: "Budi Santoso", email: "budi@email.com", tier: "Gold Member", points: 2450 };
-
-const ROOMS = [
-  {
-    id: "ruang-tamu",
-    name: "Ruang Tamu",
-    name_en: "Living Room",
-    desc: "Ciptakan ruang yang hangat dan mengundang untuk berkumpul bersama keluarga.",
-    count: 48,
-    img: "/hero-living.png",
-    accent: "rgba(196,113,58,0.15)",
-    products: ["Bouclé Armchair", "Travertine Coffee Table", "Rattan Pendant Lamp"],
-  },
-  {
-    id: "kamar-tidur",
-    name: "Kamar Tidur",
-    name_en: "Bedroom",
-    desc: "Desain kamar tidur sebagai sanctuary personal Anda — tenang, elegan, dan restoratif.",
-    count: 35,
-    img: "/hero-bedroom.png",
-    accent: "rgba(109,89,76,0.15)",
-    products: ["Linen Throw Pillow Set", "Oak Bedside Table", "Japandi Floor Lamp"],
-  },
-  {
-    id: "ruang-makan",
-    name: "Ruang Makan",
-    name_en: "Dining Room",
-    desc: "Jadikan momen makan bersama lebih berkesan dengan furnitur yang tepat dan estetik.",
-    count: 29,
-    img: "/hero-living.png",
-    accent: "rgba(42,38,32,0.1)",
-    products: ["Oak Dining Table", "Velvet Dining Chair", "Ceramic Centerpiece"],
-  },
-  {
-    id: "dapur",
-    name: "Dapur & Bar",
-    name_en: "Kitchen & Bar",
-    desc: "Transformasi dapur menjadi ruang kreatif yang fungsional sekaligus menawan.",
-    count: 22,
-    img: "/hero-bedroom.png",
-    accent: "rgba(196,113,58,0.1)",
-    products: ["Marble Bar Stool", "Copper Pendant Light", "Ceramic Canister Set"],
-  },
-  {
-    id: "kamar-mandi",
-    name: "Kamar Mandi",
-    name_en: "Bathroom",
-    desc: "Ubah ritual harian menjadi pengalaman spa mewah di dalam rumah Anda.",
-    count: 18,
-    img: "/hero-living.png",
-    accent: "rgba(109,89,76,0.12)",
-    products: ["Travertine Soap Dish", "Bamboo Bath Mat", "Stone Diffuser"],
-  },
-  {
-    id: "teras",
-    name: "Teras & Outdoor",
-    name_en: "Terrace & Outdoor",
-    desc: "Perpanjang estetika interior ke ruang luar dengan koleksi outdoor pilihan kami.",
-    count: 15,
-    img: "/hero-bedroom.png",
-    accent: "rgba(42,38,32,0.08)",
-    products: ["Teak Lounge Chair", "Rattan Side Table", "Solar Garden Lamp"],
-  },
-];
+function getStoredUser() {
+  if (typeof window === 'undefined') return { name: "Guest", email: "", tier: "Bronze", points: 0 };
+  const saved = localStorage.getItem('user');
+  return saved ? JSON.parse(saved) : { name: "Guest", email: "", tier: "Bronze", points: 0 };
+}
 
 const INSPIRATIONS = [
   { title: "Japandi Minimalism", subtitle: "Perpaduan Jepang & Skandinavia", img: "/hero-living.png", tag: "Tren 2025" },
@@ -76,12 +18,37 @@ const INSPIRATIONS = [
 ];
 
 export default function RuanganPage() {
+  const user = getStoredUser();
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [hoveredRoom, setHoveredRoom] = useState<string | null>(null);
   const [hoveredInspir, setHoveredInspir] = useState<number | null>(null);
 
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const categories = await fetchCategories();
+        setRooms(categories.map((cat: any, idx: number) => ({
+          id: cat.id?.toString() || String(idx),
+          name: cat.name || "Unknown",
+          name_en: cat.name || "Unknown",
+          desc: cat.description || "Temukan furnitur terbaik untuk ruangan Anda.",
+          count: cat.productCount || 0,
+          img: cat.imageUrl || "/hero-living.png",
+          accent: idx % 2 === 0 ? "rgba(196,113,58,0.15)" : "rgba(109,89,76,0.15)",
+        })));
+      } catch (error) {
+        console.error("Failed to load rooms:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
   return (
     <div style={{ minHeight: "100vh", background: "var(--bone)" }}>
-      <NavbarUser user={USER} />
+      <NavbarUser user={user} />
 
       {/* ── Hero ── */}
       <section

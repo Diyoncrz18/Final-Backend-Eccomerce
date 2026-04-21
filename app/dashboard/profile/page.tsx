@@ -1,9 +1,9 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import NavbarUser from "../../components/NavbarUser";
 
-const USER = {
+const DEFAULT_USER = {
   name: "Budi Santoso",
   email: "budi@email.com",
   phone: "+62 812 3456 7890",
@@ -14,6 +14,12 @@ const USER = {
   gender: "Laki-laki",
   birthdate: "1990-05-15",
 };
+
+function getStoredUser() {
+  if (typeof window === 'undefined') return DEFAULT_USER;
+  const saved = localStorage.getItem('user');
+  return saved ? { ...DEFAULT_USER, ...JSON.parse(saved) } : DEFAULT_USER;
+}
 
 const ADDRESSES = [
   {
@@ -43,6 +49,7 @@ const ADDRESSES = [
 type Section = "profil" | "alamat" | "keamanan" | "notifikasi";
 
 export default function ProfilePage() {
+  const user = getStoredUser();
   const [activeSection, setActiveSection] = useState<Section>("profil");
   const [editMode, setEditMode] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -57,11 +64,11 @@ export default function ProfilePage() {
   });
 
   const [formData, setFormData] = useState({
-    name: USER.name,
-    email: USER.email,
-    phone: USER.phone,
-    gender: USER.gender,
-    birthdate: USER.birthdate,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    gender: user.gender,
+    birthdate: user.birthdate,
   });
 
   const NAV_ITEMS: { key: Section; label: string; icon: React.ReactNode }[] = [
@@ -105,7 +112,7 @@ export default function ProfilePage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bone)" }}>
-      <NavbarUser user={USER} />
+      <NavbarUser user={user} />
 
       {/* ── Page Header ── */}
       <div style={{ background: "var(--white)", borderBottom: "1px solid var(--stone-light)", paddingTop: "72px" }}>
@@ -163,13 +170,13 @@ export default function ProfilePage() {
                 </button>
               </div>
               <p style={{ fontFamily: "var(--font-display)", fontSize: "1rem", fontWeight: 300, color: "var(--cream)", marginBottom: "0.2rem", position: "relative" }}>
-                {USER.name}
+                {user.name}
               </p>
               <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", position: "relative" }}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="var(--copper)" stroke="none">
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                 </svg>
-                <p style={{ fontSize: "0.65rem", color: "var(--copper)", letterSpacing: "0.12em" }}>{USER.tier}</p>
+                <p style={{ fontSize: "0.65rem", color: "var(--copper)", letterSpacing: "0.12em" }}>{user?.tier || "Bronze"}</p>
               </div>
             </div>
 
@@ -207,7 +214,7 @@ export default function ProfilePage() {
               </div>
               <div>
                 <p style={{ fontSize: "0.65rem", color: "var(--stone)", marginBottom: "0.1rem" }}>Member sejak</p>
-                <p style={{ fontSize: "0.78rem", color: "var(--charcoal)", fontWeight: 500 }}>{USER.joinDate}</p>
+                <p style={{ fontSize: "0.78rem", color: "var(--charcoal)", fontWeight: 500 }}>{user?.joinDate || "Sekarang"}</p>
               </div>
             </div>
           </div>
@@ -321,7 +328,7 @@ export default function ProfilePage() {
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="var(--copper)" stroke="none">
                           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                         </svg>
-                        <p style={{ fontSize: "0.72rem", color: "var(--copper)", fontWeight: 600, letterSpacing: "0.08em" }}>{USER.tier}</p>
+                        <p style={{ fontSize: "0.72rem", color: "var(--copper)", fontWeight: 600, letterSpacing: "0.08em" }}>{user?.tier || "Bronze"}</p>
                       </div>
                       <Link href="/dashboard/rewards" style={{ fontSize: "0.7rem", color: "var(--stone)", borderBottom: "1px dotted var(--stone-light)", paddingBottom: "1px" }}>
                         Lihat rewards →
@@ -334,7 +341,7 @@ export default function ProfilePage() {
                 {editMode && (
                   <div style={{ display: "flex", gap: "0.75rem", marginTop: "1rem", justifyContent: "flex-end" }}>
                     <button
-                      onClick={() => { setEditMode(false); setFormData({ name: USER.name, email: USER.email, phone: USER.phone, gender: USER.gender, birthdate: USER.birthdate }); }}
+                      onClick={() => { setEditMode(false); setFormData({ name: user.name, email: user.email, phone: user.phone, gender: user.gender, birthdate: user.birthdate }); }}
                       style={{ padding: "0.7rem 1.75rem", background: "transparent", border: "1px solid var(--stone-light)", color: "var(--charcoal)", fontFamily: "var(--font-body)", fontSize: "0.78rem", letterSpacing: "0.08em", cursor: "pointer" }}
                     >
                       Batal

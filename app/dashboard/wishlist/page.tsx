@@ -1,27 +1,24 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../../components/NavbarUser";
+import { getWishlist, removeFromWishlist, getAuthToken, fetchProducts } from "../../../services/api";
 
-const USER = { name: "Budi Santoso", email: "budi@email.com", tier: "Gold Member", points: 2450 };
+function getStoredUser() {
+  if (typeof window === 'undefined') return { name: "Guest", email: "", tier: "Bronze", points: 0 };
+  const saved = localStorage.getItem('user');
+  return saved ? JSON.parse(saved) : { name: "Guest", email: "", tier: "Bronze", points: 0 };
+}
 
 interface WishItem {
   id: number; name: string; category: string; price: number; origPrice?: number;
   img: string; rating: number; stock: number; addedDate: string;
 }
 
-const WISHLIST: WishItem[] = [
-  { id: 2, name: "Olive Linen Sofa", category: "Kursi & Sofa", price: 12500000, img: "/product-sofa.png", rating: 4.8, stock: 3, addedDate: "18 Apr 2025" },
-  { id: 5, name: "Oak Dining Table", category: "Meja", price: 9800000, img: "/product-table.png", rating: 4.8, stock: 2, addedDate: "15 Apr 2025" },
-  { id: 6, name: "Rattan Pendant Lamp", category: "Lampu", price: 2750000, img: "/product-lamp.png", rating: 4.8, stock: 12, addedDate: "10 Apr 2025" },
-  { id: 3, name: "Velvet Accent Chair", category: "Kursi & Sofa", price: 5040000, origPrice: 7200000, img: "/product-velvet-chair.png", rating: 4.7, stock: 5, addedDate: "5 Apr 2025" },
-  { id: 7, name: "Ceramic Statement Vase", category: "Dekorasi", price: 1350000, img: "/product-ceramic-vase.png", rating: 4.9, stock: 20, addedDate: "2 Apr 2025" },
-  { id: 11, name: "Rattan Wall Panel", category: "Dekorasi", price: 2100000, img: "/product-rattan-wall.png", rating: 4.8, stock: 8, addedDate: "28 Mar 2025" },
-  { id: 4, name: "Marble Side Table", category: "Meja", price: 3360000, origPrice: 4800000, img: "/product-marble-table.png", rating: 4.9, stock: 3, addedDate: "20 Mar 2025" },
-];
+const WISHLIST_DEFAULT: WishItem[] = [];
 
-const RECOMMENDED = [
+const RECOMMENDED_MOCK = [
   { id: 1, name: "Bouclé Armchair", price: 6400000, img: "/product-chair.png", rating: 4.9 },
   { id: 2, name: "Olive Linen Sofa", price: 12500000, img: "/product-sofa.png", rating: 4.8 },
   { id: 7, name: "Ceramic Statement Vase", price: 1350000, img: "/product-ceramic-vase.png", rating: 4.9 },
@@ -40,13 +37,62 @@ function Stars({ n }: { n: number }) {
 }
 
 export default function WishlistPage() {
-  const [items, setItems] = useState<WishItem[]>(WISHLIST);
+  const user = getStoredUser();
+  const [items, setItems] = useState<WishItem[]>(WISHLIST_DEFAULT);
   const [hovered, setHovered] = useState<number | null>(null);
   const [hoveredRec, setHoveredRec] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState("terbaru");
   const [addedToCart, setAddedToCart] = useState<Set<number>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [recommended, setRecommended] = useState(RECOMMENDED_MOCK);
 
-  const removeItem = (id: number) => setItems(prev => prev.filter(i => i.id !== id));
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const token = getAuthToken();
+        if (token) {
+          const wishlistData = await getWishlist();
+          if (wishlistData && wishlistData.length > 0) {
+            setItems(wishlistData.map((item: any, idx: number) => ({
+              id: item.id || idx,
+              name: item.name,
+              category: item.category || "Uncategorized",
+              price: item.price || 0,
+              img: item.imageUrl || "/product-chair.png",
+              rating: 4.5,
+              stock: 10,
+              addedDate: new Date().toLocaleDateString("id-ID")
+            })));
+          }
+        }
+        
+        // Load recommendations
+        const products = await fetchProducts(0, 4);
+        if (products.length > 0) {
+          setRecommended(products.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            img: p.imageUrl || "/product-chair.png",
+            rating: p.rating || 4.5
+          })));
+        }
+      } catch (error) {
+        console.error("Failed to load wishlist:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  const removeItem = async (id: number) => {
+    const token = getAuthToken();
+    if (token) {
+      await removeFromWishlist(id);
+    }
+    setItems(prev => prev.filter(i => i.id !== id));
+  };
 
   const addToCart = (id: number) => {
     setAddedToCart(prev => new Set([...prev, id]));
@@ -68,7 +114,7 @@ export default function WishlistPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bone)" }}>
-      <NavbarUser user={USER} />
+      <NavbarUser user={user} />
 
       {/* ── Header ── */}
       <div style={{ background: "var(--white)", borderBottom: "1px solid var(--stone-light)", paddingTop: "72px" }}>
@@ -287,7 +333,7 @@ export default function WishlistPage() {
             </Link>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1.25rem" }} className="rec-grid">
-            {RECOMMENDED.map(r => (
+            {recommended.map(r => (
               <Link key={r.id} href={`/product/${r.id}`} style={{ display: "block", textDecoration: "none" }}
                 onMouseEnter={() => setHoveredRec(r.id)} onMouseLeave={() => setHoveredRec(null)}>
                 <div style={{

@@ -1,10 +1,15 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../components/NavbarUser";
+import { fetchProducts, getAuthToken } from "../../services/api";
 
-const USER = { name: "Budi Santoso", email: "budi@email.com", tier: "Gold Member", points: 2450 };
+function getStoredUser() {
+  if (typeof window === 'undefined') return { name: "Guest", email: "", tier: "Bronze", points: 0 };
+  const saved = localStorage.getItem('user');
+  return saved ? JSON.parse(saved) : { name: "Guest", email: "", tier: "Bronze", points: 0 };
+}
 
 /* ─────────── Types ─────────── */
 interface CartItem {
@@ -13,23 +18,13 @@ interface CartItem {
 }
 
 /* ─────────── Initial Cart ─────────── */
-const INITIAL_CART: CartItem[] = [
-  { id: 1, name: "Bouclé Armchair", variant: "Cream Bouclé", price: 6400000, qty: 1, img: "/product-chair.png", sku: "MSN-CHAIR-001", stock: 8, category: "Kursi & Sofa" },
-  { id: 4, name: "Marble Side Table", variant: "White Carrara", price: 3360000, qty: 1, img: "/product-marble-table.png", sku: "MSN-TABLE-004", stock: 3, category: "Meja" },
-];
+const INITIAL_CART: CartItem[] = [];
 
 const PROMO_CODES: Record<string, number> = {
   "MAISON10": 10,
   "WELCOME15": 15,
   "MEMBER20": 20,
 };
-
-const RECOMMENDATIONS = [
-  { id: 6, name: "Rattan Pendant Lamp", price: 2750000, img: "/product-lamp.png", rating: 4.8 },
-  { id: 7, name: "Ceramic Statement Vase", price: 1350000, img: "/product-ceramic-vase.png", rating: 4.9 },
-  { id: 2, name: "Olive Linen Sofa", price: 12500000, img: "/product-sofa.png", rating: 4.8 },
-  { id: 11, name: "Rattan Wall Panel", price: 2100000, img: "/product-rattan-wall.png", rating: 4.8 },
-];
 
 function formatRp(n: number) {
   return "Rp " + n.toLocaleString("id-ID");
@@ -87,7 +82,10 @@ function EmptyCart() {
 
 /* ─────────── Main Page ─────────── */
 export default function CartPage() {
-  const [items, setItems] = useState<CartItem[]>(INITIAL_CART);
+  const user = getStoredUser();
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [recommendations, setRecommendations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [promoCode, setPromoCode] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
   const [promoError, setPromoError] = useState("");
@@ -96,12 +94,45 @@ export default function CartPage() {
   const [hoverRec, setHoverRec] = useState<number | null>(null);
   const [usePoints, setUsePoints] = useState(false);
 
+  useEffect(() => {
+    async function loadData() {
+      try {
+        // Load cart from localStorage
+        const savedCart = localStorage.getItem('cart');
+        if (savedCart) {
+          setItems(JSON.parse(savedCart));
+        }
+        
+        // Load recommendations from API
+        const products = await fetchProducts(0, 4);
+        if (products.length > 0) {
+          setRecommendations(products.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            price: Number(p.price),
+            img: p.imageUrl || "/product-chair.png",
+            rating: Number(p.rating) || 4.5,
+          })));
+        }
+      } catch (error) {
+        console.error("Failed to load cart data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('cart', JSON.stringify(items));
+  }, [items]);
+
   /* Calculations */
   const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
   const shipping = subtotal >= 5000000 ? 0 : 150000;
   const promoDisc = appliedPromo ? Math.round(subtotal * (PROMO_CODES[appliedPromo] / 100)) : 0;
   const memberDisc = Math.round(subtotal * 0.05); // 5% gold member
-  const pointsDisc = usePoints ? Math.min(USER.points * 10, subtotal * 0.1) : 0; // 10 pts = Rp10, max 10%
+  const pointsDisc = usePoints ? Math.min((user.points || 0) * 10, subtotal * 0.1) : 0; // 10 pts = Rp10, max 10%
   const total = subtotal + shipping - promoDisc - memberDisc - pointsDisc;
   const pointsEarned = Math.floor(total / 10000); // 1 point per Rp10,000
 
@@ -143,7 +174,7 @@ export default function CartPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bone)" }}>
-      <NavbarUser user={USER} />
+      <NavbarUser user={user} />
 
       {/* ── Page Header ── */}
       <div style={{
@@ -436,10 +467,10 @@ export default function CartPage() {
                   }}>
                     <div>
                       <p style={{ fontSize: "0.78rem", fontWeight: 500, color: "var(--charcoal)", marginBottom: "0.15rem" }}>
-                        Gunakan Poin ({USER.points.toLocaleString()} pts)
+                        Gunakan Poin ({(user.points || 0).toLocaleString()} pts)
                       </p>
                       <p style={{ fontSize: "0.68rem", color: "var(--stone)" }}>
-                        Hemat hingga {formatRp(Math.min(USER.points * 10, subtotal * 0.1))}
+                        Hemat hingga {formatRp(Math.min((user.points || 0) * 10, subtotal * 0.1))}
                       </p>
                     </div>
                     <button onClick={() => setUsePoints(!usePoints)}
@@ -606,7 +637,7 @@ export default function CartPage() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1.25rem" }} className="rec-grid">
-              {RECOMMENDATIONS.map(item => (
+              {recommendations.map(item => (
                 <Link key={item.id} href={`/product/${item.id}`}
                   style={{ display: "block", textDecoration: "none" }}
                   onMouseEnter={() => setHoverRec(item.id)}

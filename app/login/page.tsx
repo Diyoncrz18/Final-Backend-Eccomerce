@@ -3,6 +3,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import AuthTransition from "../components/AuthTransition";
+import { login } from "../../services/api";
 
 function LoginContent({ navigate }: { navigate: (href: string) => void }) {
   const [email, setEmail] = useState("");
@@ -10,11 +11,28 @@ function LoginContent({ navigate }: { navigate: (href: string) => void }) {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => navigate("/dashboard"), 1200);
+    setError("");
+
+    try {
+      const result = await login({ email, password });
+      
+      if (result.success && result.data?.token) {
+        localStorage.setItem('authToken', result.data.token);
+        localStorage.setItem('user', JSON.stringify(result.data.user));
+        navigate("/dashboard");
+      } else {
+        setError(result.message || 'Email atau password salah');
+      }
+    } catch (err) {
+      setError('Terjadi kesalahan. Silakan coba lagi.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -194,6 +212,28 @@ function LoginContent({ navigate }: { navigate: (href: string) => void }) {
             animation: "fadeUp 0.6s var(--ease-out-expo) 0.1s both",
           }}
         >
+          {/* Error message */}
+          {error && (
+            <div
+              style={{
+                padding: "1rem",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                color: "#dc2626",
+                fontSize: "0.85rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 8v4M12 16h.01" />
+              </svg>
+              {error}
+            </div>
+          )}
+
           {/* Email */}
           <div style={{ position: "relative" }}>
             <label

@@ -1,9 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import NavbarUser from "../../components/NavbarUser";
+import { fetchProductById } from "../../../services/api";
 
 /* ─────────── Types ─────────── */
 interface Variant { label: string; hex: string; available: boolean }
@@ -113,7 +114,61 @@ function RatingBar({ label, count, total }: { label: string; count: number; tota
 export default function ProductPage() {
   const { id } = useParams() as { id: string };
   const override = CATALOG[id] ?? {};
-  const product: ProductData = { ...DEFAULT, ...override, id };
+  const [productData, setProductData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadProduct() {
+      try {
+        const data = await fetchProductById(Number(id));
+        if (data) {
+          setProductData(data);
+        }
+      } catch (error) {
+        console.error("Failed to load product:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProduct();
+  }, [id]);
+
+  const product: ProductData = productData ? {
+    id: String(productData.id),
+    name: productData.name || "Unknown Product",
+    collection: productData.collection?.name || "Maison Collection",
+    category: productData.category?.name || "Furniture",
+    categoryPath: "/koleksi",
+    price: Number(productData.price) || 0,
+    salePrice: productData.salePrice ? Number(productData.salePrice) : null,
+    memberPrice: Number(productData.price) * 0.95 || 0,
+    rating: Number(productData.rating) || 4.5,
+    reviewCount: productData.reviewCount || 0,
+    stock: productData.stock || 0,
+    sku: productData.sku || "MSN-000",
+    images: productData.imageUrl ? [productData.imageUrl] : ["/product-chair.png"],
+    variants: [],
+    shortDesc: productData.description || "",
+    fullDesc: productData.description || "",
+    specs: {
+      material: productData.material || "-",
+      dimensions: productData.dimensions || "-",
+      weight: productData.weightKg ? `${productData.weightKg} kg` : "-",
+      assembly: productData.assemblyRequired ? "Ya" : "Tidak",
+      origin: "Indonesia",
+    },
+    shipping: "Estimasi pengiriman 7-14 hari kerja",
+    warranty: productData.warrantyMonths ? `${productData.warrantyMonths} bulan garansi` : "1 tahun garansi",
+    tags: [productData.category?.name || "Furniture"],
+  } : { ...DEFAULT, ...override, id };
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", background: "var(--bone)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p>Loading...</p>
+      </div>
+    );
+  }
 
   const [activeImg, setActiveImg] = useState(0);
   const [imgZoom, setImgZoom] = useState(false);

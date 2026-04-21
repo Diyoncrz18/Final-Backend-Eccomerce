@@ -1,9 +1,16 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import NavbarUser from "../../components/NavbarUser";
+import { getAuthToken, getCurrentUser } from "../../../services/api";
 
-const USER = { name: "Budi Santoso", email: "budi@email.com", tier: "Gold Member", points: 2450 };
+const DEFAULT_USER = { name: "Budi Santoso", email: "budi@email.com", tier: "Gold Member", points: 2450 };
+
+function getStoredUser() {
+  if (typeof window === 'undefined') return DEFAULT_USER;
+  const saved = localStorage.getItem('user');
+  return saved ? JSON.parse(saved) : DEFAULT_USER;
+}
 
 function formatRp(n: number) { return "Rp " + n.toLocaleString("id-ID"); }
 
@@ -74,8 +81,9 @@ export default function RewardsPage() {
   const [redeeming, setRedeeming] = useState<number | null>(null);
   const [redeemed, setRedeemed] = useState<Set<number>>(new Set());
   const [activeTab, setActiveTab] = useState<"semua" | "earn" | "redeem">("semua");
+  const [user, setUser] = useState(getStoredUser());
 
-  const currentPts  = USER.points;
+  const currentPts  = user?.points || 0;
   const nextTier    = TIER_THRESHOLDS.find(t => currentPts < t.max && currentPts >= t.min);
   const nextTierObj = nextTier?.name === "Gold" ? TIER_THRESHOLDS[2] : null; // next = Platinum
   const ptsToNext   = nextTierObj ? nextTierObj.min - currentPts : 0;
@@ -96,7 +104,7 @@ export default function RewardsPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bone)" }}>
-      <NavbarUser user={USER} />
+      <NavbarUser user={user} />
 
       {/* ── Header ── */}
       <div style={{ background: "var(--white)", borderBottom: "1px solid var(--stone-light)", paddingTop: "72px" }}>
@@ -136,7 +144,7 @@ export default function RewardsPage() {
                   </p>
                 </div>
                 <p style={{ fontFamily: "var(--font-display)", fontSize: "2rem", fontWeight: 300, color: "var(--cream)", marginBottom: "0.25rem" }}>
-                  {USER.name}
+                  {user?.name}
                 </p>
                 <p style={{ fontSize: "0.78rem", color: "rgba(245,240,232,0.5)", marginBottom: "2rem" }}>
                   Member sejak Maret 2024
@@ -147,7 +155,7 @@ export default function RewardsPage() {
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                   </svg>
                   <p style={{ fontFamily: "var(--font-display)", fontSize: "1.1rem", fontWeight: 300, color: "var(--copper)" }}>
-                    {USER.tier}
+                    {user?.tier || "Bronze"}
                   </p>
                 </div>
               </div>

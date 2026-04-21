@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import { fetchProducts, fetchCategories } from "../services/api";
 
 /* ============================================================
    DATA
@@ -36,51 +37,6 @@ const HERO_SLIDES = [
     cta: "Temukan Lebih",
     href: "#trust",
   },
-];
-
-const PRODUCTS = [
-  {
-    id: "p1",
-    name: "Boucle Cloud Sofa",
-    category: "Ruang Tamu",
-    price: 28_500_000,
-    image: "/product-sofa.png",
-    tag: "Terlaris",
-    tagColor: "var(--copper)",
-  },
-  {
-    id: "p2",
-    name: "Rattan Glow Lamp",
-    category: "Pencahayaan",
-    price: 6_200_000,
-    image: "/product-lamp.png",
-    tag: "Baru",
-    tagColor: "var(--charcoal)",
-  },
-  {
-    id: "p3",
-    name: "Travertine Side Table",
-    category: "Meja",
-    price: 12_800_000,
-    image: "/product-table.png",
-    tag: "Eksklusif",
-    tagColor: "var(--copper-dark)",
-  },
-  {
-    id: "p4",
-    name: "Linen Curve Chair",
-    category: "Kursi",
-    price: 9_400_000,
-    image: "/product-chair.png",
-    tag: null,
-    tagColor: "",
-  },
-];
-
-const CATEGORIES = [
-  { name: "Ruang Tamu", image: "/hero-living.png", count: 84 },
-  { name: "Kamar Tidur", image: "/hero-bedroom.png", count: 67 },
-  { name: "Ruang Makan", image: "/hero-dining.png", count: 42 },
 ];
 
 const MARQUEE_ITEMS = [
@@ -362,7 +318,7 @@ function MarqueeSection() {
 /* ============================================================
    SECTION: FEATURED PRODUCTS
    ============================================================ */
-function ProductCard({ product }: { product: typeof PRODUCTS[0] }) {
+function ProductCard({ product }: any) {
   const [wished, setWished] = useState(false);
 
   return (
@@ -374,7 +330,7 @@ function ProductCard({ product }: { product: typeof PRODUCTS[0] }) {
       {/* Image */}
       <div style={{ position: "relative", overflow: "hidden" }}>
         <Image
-          src={product.image}
+          src={product.imageUrl || "/product-sofa.png"}
           alt={product.name}
           width={600}
           height={750}
@@ -383,14 +339,14 @@ function ProductCard({ product }: { product: typeof PRODUCTS[0] }) {
         />
 
         {/* Tag badge */}
-        {product.tag && (
+        {product.isNew && (
           <span
             style={{
               position: "absolute",
               top: "1rem",
               left: "1rem",
               padding: "0.3rem 0.75rem",
-              background: product.tagColor,
+              background: "var(--copper)",
               color: "var(--white)",
               fontSize: "0.65rem",
               fontWeight: 500,
@@ -398,7 +354,7 @@ function ProductCard({ product }: { product: typeof PRODUCTS[0] }) {
               textTransform: "uppercase",
             }}
           >
-            {product.tag}
+            Baru
           </span>
         )}
 
@@ -457,7 +413,7 @@ function ProductCard({ product }: { product: typeof PRODUCTS[0] }) {
       {/* Info */}
       <div style={{ padding: "1.25rem 1rem 1.5rem" }}>
         <p className="text-label" style={{ marginBottom: "0.4rem" }}>
-          {product.category}
+          {product.category?.name || "Unknown Category"}
         </p>
         <h3
           style={{
@@ -485,6 +441,37 @@ function ProductCard({ product }: { product: typeof PRODUCTS[0] }) {
 }
 
 function FeaturedProductsSection() {
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        const data = await fetchProducts();
+        setProducts(data.slice(0, 4)); // Show only 4 featured products
+      } catch (error) {
+        console.error("Failed to load products:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProducts();
+  }, []);
+
+  if (loading) {
+    return (
+      <section
+        id="featured-products"
+        className="section"
+        style={{ background: "var(--bone)", minHeight: "400px" }}
+      >
+        <div className="container-main" style={{ textAlign: "center", padding: "4rem 0" }}>
+          <p>Loading products...</p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section
       id="featured-products"
@@ -511,7 +498,7 @@ function FeaturedProductsSection() {
               <em style={{ fontStyle: "italic" }}>Terkurasi</em>
             </h2>
           </div>
-          <Link href="#categories" className="btn-ghost" id="view-all-products">
+          <Link href="/koleksi" className="btn-ghost" id="view-all-products">
             Lihat Kategori
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M5 12h14M12 5l7 7-7 7" />
@@ -528,7 +515,7 @@ function FeaturedProductsSection() {
           }}
           className="products-grid"
         >
-          {PRODUCTS.map((product) => (
+          {products.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
@@ -660,6 +647,35 @@ function EditorialBanner() {
    SECTION: CATEGORIES
    ============================================================ */
 function CategoriesSection() {
+  const [categories, setCategories] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const defaultCategories = [
+    { name: "Ruang Tamu", imageUrl: "/hero-living.png", productCount: 84 },
+    { name: "Kamar Tidur", imageUrl: "/hero-bedroom.png", productCount: 67 },
+    { name: "Ruang Makan", imageUrl: "/hero-dining.png", productCount: 42 },
+  ];
+
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const response = await fetch('http://localhost:8081/api/v1/categories');
+        if (response.ok) {
+          const data = await response.json();
+          setCategories(data.length > 0 ? data : defaultCategories);
+        } else {
+          setCategories(defaultCategories);
+        }
+      } catch (error) {
+        console.error("Failed to load categories:", error);
+        setCategories(defaultCategories);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadCategories();
+  }, []);
+
   return (
     <section
       id="categories"
@@ -684,66 +700,72 @@ function CategoriesSection() {
           }}
           className="categories-grid"
         >
-          {CATEGORIES.map((cat, i) => (
-            <Link
-              key={cat.name}
-              href={`/koleksi/${cat.name.toLowerCase().replace(/ /g, "-")}`}
-              id={`category-${i}`}
-              style={{
-                position: "relative",
-                display: "block",
-                overflow: "hidden",
-                aspectRatio: i === 0 ? "3/4" : "4/5",
-                cursor: "pointer",
-              }}
-              className="category-card"
-              aria-label={`Kategori ${cat.name}`}
-            >
-              <Image
-                src={cat.image}
-                alt={cat.name}
-                fill
-                style={{ objectFit: "cover", transition: "transform 0.7s ease" }}
-                sizes="33vw"
-                className="cat-img"
-              />
-              {/* overlay */}
-              <div
+          {loading ? (
+            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "2rem 0" }}>
+              <p>Loading categories...</p>
+            </div>
+          ) : (
+            categories.slice(0, 3).map((cat: any, i: number) => (
+              <Link
+                key={cat.id || cat.name}
+                href={`/koleksi/${(cat.name || "").toLowerCase().replace(/ /g, "-")}`}
+                id={`category-${i}`}
                 style={{
-                  position: "absolute",
-                  inset: 0,
-                  background:
-                    "linear-gradient(to top, rgba(26,23,20,0.65) 0%, rgba(26,23,20,0.1) 50%, transparent 100%)",
-                  transition: "opacity 0.4s ease",
+                  position: "relative",
+                  display: "block",
+                  overflow: "hidden",
+                  aspectRatio: i === 0 ? "3/4" : "4/5",
+                  cursor: "pointer",
                 }}
-              />
-              {/* label */}
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: "1.75rem",
-                  left: "1.75rem",
-                }}
+                className="category-card"
+                aria-label={`Kategori ${cat.name}`}
               >
-                <p
-                  className="text-label"
-                  style={{ color: "rgba(245,240,232,0.65)", marginBottom: "0.4rem" }}
-                >
-                  {cat.count} Produk
-                </p>
-                <h3
+                <Image
+                  src={cat.imageUrl || "/hero-living.png"}
+                  alt={cat.name}
+                  fill
+                  style={{ objectFit: "cover", transition: "transform 0.7s ease" }}
+                  sizes="33vw"
+                  className="cat-img"
+                />
+                {/* overlay */}
+                <div
                   style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: "1.75rem",
-                    fontWeight: 300,
-                    color: "var(--cream)",
+                    position: "absolute",
+                    inset: 0,
+                    background:
+                      "linear-gradient(to top, rgba(26,23,20,0.65) 0%, rgba(26,23,20,0.1) 50%, transparent 100%)",
+                    transition: "opacity 0.4s ease",
+                  }}
+                />
+                {/* label */}
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "1.75rem",
+                    left: "1.75rem",
                   }}
                 >
-                  {cat.name}
-                </h3>
-              </div>
-            </Link>
-          ))}
+                  <p
+                    className="text-label"
+                    style={{ color: "rgba(245,240,232,0.65)", marginBottom: "0.4rem" }}
+                  >
+                    {cat.productCount || 0} Produk
+                  </p>
+                  <h3
+                    style={{
+                      fontFamily: "var(--font-display)",
+                      fontSize: "1.75rem",
+                      fontWeight: 300,
+                      color: "var(--cream)",
+                    }}
+                  >
+                    {cat.name}
+                  </h3>
+                </div>
+              </Link>
+            ))
+          )}
         </div>
       </div>
 

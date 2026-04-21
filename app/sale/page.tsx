@@ -3,21 +3,13 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../components/NavbarUser";
+import { fetchProducts } from "../../services/api";
 
-const USER = { name: "Budi Santoso", email: "budi@email.com", tier: "Gold Member", points: 2450 };
-
-const SALE_PRODUCTS = [
-  { id: 1, name: "Marble Side Table", orig: 4800000, sale: 3360000, disc: 30, img: "/product-marble-table.png", cat: "Meja", rating: 4.9, stock: 3 },
-  { id: 2, name: "Velvet Accent Chair", orig: 7200000, sale: 5040000, disc: 30, img: "/product-velvet-chair.png", cat: "Kursi", rating: 4.7, stock: 5 },
-  { id: 3, name: "Rattan Wall Panel", orig: 2100000, sale: 1470000, disc: 30, img: "/product-rattan-wall.png", cat: "Dekorasi", rating: 4.8, stock: 8 },
-  { id: 4, name: "Ceramic Statement Vase", orig: 1350000, sale: 945000, disc: 30, img: "/product-ceramic-vase.png", cat: "Dekorasi", rating: 4.9, stock: 12 },
-  { id: 5, name: "Japandi Floor Lamp", orig: 1850000, sale: 1295000, disc: 30, img: "/product-lamp.png", cat: "Lampu", rating: 5.0, stock: 6 },
-  { id: 6, name: "Oak Dining Table", orig: 9800000, sale: 7350000, disc: 25, img: "/product-table.png", cat: "Meja", rating: 4.8, stock: 2 },
-  { id: 7, name: "Bouclé Armchair", orig: 6400000, sale: 4800000, disc: 25, img: "/product-chair.png", cat: "Kursi", rating: 4.9, stock: 4 },
-  { id: 8, name: "Olive Linen Sofa", orig: 12500000, sale: 9375000, disc: 25, img: "/product-sofa.png", cat: "Kursi", rating: 4.8, stock: 1 },
-];
-
-const FLASH_SALE = SALE_PRODUCTS.slice(0, 4);
+function getStoredUser() {
+  if (typeof window === 'undefined') return { name: "Guest", email: "", tier: "Bronze", points: 0 };
+  const saved = localStorage.getItem('user');
+  return saved ? JSON.parse(saved) : { name: "Guest", email: "", tier: "Bronze", points: 0 };
+}
 
 // Sale ends: 3 days from now
 const SALE_END = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
@@ -77,17 +69,45 @@ function formatRp(n: number) {
 }
 
 export default function SalePage() {
+  const user = getStoredUser();
   const [hovered, setHovered] = useState<number | null>(null);
   const [activeFilter, setActiveFilter] = useState("semua");
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        const data = await fetchProducts(0, 20);
+        const saleProducts = data.filter((p: any) => p.salePrice);
+        setProducts(saleProducts.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          orig: Number(p.price),
+          sale: Number(p.salePrice),
+          disc: Math.round((1 - Number(p.salePrice) / Number(p.price)) * 100),
+          img: p.imageUrl || "/product-chair.png",
+          cat: p.category?.name || "Furniture",
+          rating: Number(p.rating) || 4.5,
+          stock: p.stock || 0,
+        })));
+      } catch (error) {
+        console.error("Failed to load sale products:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProducts();
+  }, []);
 
   const filters = ["semua", "kursi", "meja", "lampu", "dekorasi"];
-  const filtered = SALE_PRODUCTS.filter(p =>
+  const filtered = products.filter(p =>
     activeFilter === "semua" || p.cat.toLowerCase() === activeFilter
   );
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bone)" }}>
-      <NavbarUser user={USER} />
+      <NavbarUser user={user} />
 
       {/* ── Hero Banner ── */}
       <section
@@ -203,7 +223,7 @@ export default function SalePage() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem" }} className="flash-grid">
-            {FLASH_SALE.map(item => (
+            {(products.length > 0 ? products.slice(0, 4) : []).map(item => (
               <Link
                 key={item.id}
                 href={`/product/${item.id}`}

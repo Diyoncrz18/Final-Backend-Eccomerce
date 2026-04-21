@@ -3,18 +3,21 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import NavbarUser from "../components/NavbarUser";
+import { getMyOrders, fetchProducts, getAuthToken, getLocalCart } from "../../services/api";
 
-/* ─────────────── Mock Data ─────────────── */
-const USER = {
-  name: "Budi Santoso",
-  email: "budi@email.com",
-  tier: "Gold Member",
-  points: 2450,
-  pointsNext: 5000,
-  joinDate: "Maret 2024",
+/* ─────────────── Default Data ─────────────── */
+const DEFAULT_USER = {
+  name: "Guest",
+  email: "",
+  tier: "Bronze",
+  points: 0,
+  pointsNext: 1000,
+  joinDate: new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" }),
 };
 
-const ORDERS = [
+const DEFAULT_ORDERS: any[] = [];
+
+const ORDER_MOCK: any[] = [
   {
     id: "MSN-20250418",
     product: "Marble Side Table",
@@ -47,20 +50,20 @@ const ORDERS = [
   },
 ];
 
-const WISHLIST = [
-  { id: 1, name: "Olive Linen Sofa", price: "Rp 12.500.000", img: "/product-sofa.png", tag: "Terlaris" },
-  { id: 2, name: "Travertine Coffee Table", price: "Rp 8.900.000", img: "/product-table.png", tag: null },
-  { id: 3, name: "Ceramic Statement Vase", price: "Rp 1.350.000", img: "/product-ceramic-vase.png", tag: "Baru" },
-  { id: 4, name: "Rattan Pendant Lamp", price: "Rp 2.750.000", img: "/product-lamp.png", tag: null },
+const DEFAULT_WISHLIST = [
+  { id: 1, name: "Olive Linen Sofa", price: 12500000, img: "/product-sofa.png", tag: "Terlaris" },
+  { id: 2, name: "Travertine Coffee Table", price: 8900000, img: "/product-table.png", tag: null },
+  { id: 3, name: "Ceramic Statement Vase", price: 1350000, img: "/product-ceramic-vase.png", tag: "Baru" },
+  { id: 4, name: "Rattan Pendant Lamp", price: 2750000, img: "/product-lamp.png", tag: null },
 ];
 
-const RECOMMENDATIONS = [
-  { id: 1, name: "Bouclé Armchair", price: "Rp 6.400.000", img: "/product-chair.png", tag: "Best Seller", rating: 4.9 },
-  { id: 2, name: "Oak Dining Table", price: "Rp 9.800.000", img: "/product-table.png", tag: null, rating: 4.8 },
-  { id: 3, name: "Japandi Floor Lamp", price: "Rp 1.850.000", img: "/product-lamp.png", tag: "New", rating: 5.0 },
-  { id: 4, name: "Linen Throw Pillow Set", price: "Rp 680.000", img: "/product-ceramic-vase.png", tag: null, rating: 4.7 },
-  { id: 5, name: "Stone Side Table", price: "Rp 3.200.000", img: "/product-marble-table.png", tag: "Diskon 15%", rating: 4.8 },
-  { id: 6, name: "Wabi-Sabi Vase Set", price: "Rp 1.100.000", img: "/product-rattan-wall.png", tag: null, rating: 4.9 },
+const RECOMMENDATIONS_MOCK = [
+  { id: 1, name: "Bouclé Armchair", price: 6400000, img: "/product-chair.png", tag: "Best Seller", rating: 4.9 },
+  { id: 2, name: "Oak Dining Table", price: 9800000, img: "/product-table.png", tag: null, rating: 4.8 },
+  { id: 3, name: "Japandi Floor Lamp", price: 1850000, img: "/product-lamp.png", tag: "New", rating: 5.0 },
+  { id: 4, name: "Linen Throw Pillow Set", price: 680000, img: "/product-ceramic-vase.png", tag: null, rating: 4.7 },
+  { id: 5, name: "Stone Side Table", price: 3200000, img: "/product-marble-table.png", tag: "Diskon 15%", rating: 4.8 },
+  { id: 6, name: "Wabi-Sabi Vase Set", price: 1100000, img: "/product-rattan-wall.png", tag: null, rating: 4.9 },
 ];
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; dot: string; step: number }> = {
@@ -94,25 +97,102 @@ function Stars({ n }: { n: number }) {
 }
 
 /* ─────────────── Main Page ─────────────── */
+function formatPrice(n: number) {
+  return "Rp " + n.toLocaleString("id-ID");
+}
+
 export default function DashboardPage() {
+  // First declare all useState hooks (order matters!)
   const [greet, emoji] = greeting();
   const [activeTab, setActiveTab] = useState<"semua" | "aktif" | "selesai">("semua");
   const [wishHover, setWishHover] = useState<number | null>(null);
   const [recHover, setRecHover] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [user, setUser] = useState(DEFAULT_USER);
+  const [orders, setOrders] = useState<any[]>(ORDER_MOCK);
+  const [wishlist, setWishlist] = useState<any[]>(DEFAULT_WISHLIST);
+  const [recommendations, setRecommendations] = useState<any[]>(RECOMMENDATIONS_MOCK);
+  const [loading, setLoading] = useState(true);
+
+  // Now use the state values
+  const currentOrders = orders.length > 0 ? orders : ORDER_MOCK;
+  const currentWishlist = wishlist.length > 0 ? wishlist : DEFAULT_WISHLIST;
+  const currentRecs = recommendations.length > 0 ? recommendations : RECOMMENDATIONS_MOCK;
+
+  // Create USER alias for compatibility
+  const USER = user || DEFAULT_USER;
 
   useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 80);
-    return () => clearTimeout(t);
+    async function loadData() {
+      try {
+        const token = getAuthToken();
+        if (token) {
+          // Get user from localStorage
+          const savedUser = localStorage.getItem('user');
+          if (savedUser) {
+            const parsed = JSON.parse(savedUser);
+            setUser({
+              ...parsed,
+              points: parsed.points || 0,
+              pointsNext: parsed.points ? parsed.points * 2 : 1000,
+              joinDate: parsed.joinDate || new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" }),
+            });
+          }
+          
+          // Get orders from API
+          const orderData = await getMyOrders(0, 10);
+          if (orderData && orderData.length > 0) {
+            setOrders(orderData.map((o: any) => ({
+              id: o.orderNumber,
+              product: o.items?.[0]?.productName || "Product",
+              status: o.status,
+              statusCode: o.status?.toLowerCase() || "pending",
+              date: new Date(o.createdAt).toLocaleDateString("id-ID"),
+              img: o.items?.[0]?.productImage || "/product-table.png",
+              price: "Rp " + (o.total || 0).toLocaleString("id-ID"),
+              eta: o.status === 'DIKIRIM' ? "3-5 hari" : null,
+            })));
+          }
+        }
+        
+        // Get products for recommendations
+        const products = await fetchProducts(0, 6);
+        if (products.length > 0) {
+          setRecommendations(products.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            img: p.imageUrl || "/product-chair.png",
+            tag: p.isNew ? "Baru" : null,
+            rating: p.rating || 4.5,
+          })));
+        }
+      } catch (error) {
+        console.error("Failed to load dashboard data:", error);
+      } finally {
+        setLoading(false);
+        const t = setTimeout(() => setMounted(true), 80);
+        return () => clearTimeout(t);
+      }
+    }
+    loadData();
   }, []);
 
-  const ordersFiltered = ORDERS.filter((o) =>
+  const ordersFiltered = orders.filter((o: any) =>
     activeTab === "semua" ? true
       : activeTab === "aktif" ? o.statusCode === "shipping" || o.statusCode === "packing"
         : o.statusCode === "done"
   );
 
   const pct = Math.round((USER.points / USER.pointsNext) * 100);
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", background: "var(--bone)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p>Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -124,7 +204,7 @@ export default function DashboardPage() {
         transition: "opacity 0.5s ease, transform 0.5s ease",
       }}
     >
-      <NavbarUser user={USER} />
+      <NavbarUser user={user} />
 
       {/* ═══════════════ 1. HERO GREETING ═══════════════ */}
       <section
@@ -774,7 +854,7 @@ export default function DashboardPage() {
             }}
             className="product-grid"
           >
-            {RECOMMENDATIONS.map((item) => (
+            {currentRecs.map((item: any) => (
               <Link
                 key={item.id}
                 href={`/product/${item.id}`}
@@ -956,7 +1036,7 @@ export default function DashboardPage() {
                 paddingBottom: "2px",
               }}
             >
-              Lihat Semua ({WISHLIST.length})
+              Lihat Semua ({currentWishlist.length})
             </Link>
           </div>
 
@@ -968,7 +1048,7 @@ export default function DashboardPage() {
             }}
             className="wishlist-grid"
           >
-            {WISHLIST.map((item) => (
+            {currentWishlist.map((item: any) => (
               <Link
                 key={item.id}
                 href={`/product/${item.id}`}
