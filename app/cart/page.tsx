@@ -3,18 +3,12 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../components/NavbarUser";
-import { fetchProducts, getAuthToken } from "../../services/api";
-
-function getStoredUser() {
-  if (typeof window === 'undefined') return { name: "Guest", email: "", tier: "Bronze", points: 0 };
-  const saved = localStorage.getItem('user');
-  return saved ? JSON.parse(saved) : { name: "Guest", email: "", tier: "Bronze", points: 0 };
-}
+import { fetchProducts, getAuthToken, getImageUrl, getStoredUser } from "../../services/api";
 
 /* ─────────── Types ─────────── */
 interface CartItem {
   id: number; name: string; variant: string; price: number;
-  qty: number; img: string; sku: string; stock: number; category: string;
+  qty: number; img: string; imageUrl?: string; sku: string; stock: number; category: string;
 }
 
 /* ─────────── Initial Cart ─────────── */
@@ -238,7 +232,7 @@ export default function CartPage() {
                     {/* Image */}
                     <Link href={`/product/${item.id}`} style={{ flexShrink: 0, display: "block" }}>
                       <div style={{ width: "100px", height: "100px", position: "relative", overflow: "hidden", background: "var(--bone)", border: "1px solid var(--stone-light)" }}>
-                        <Image src={item.img} alt={item.name} fill style={{ objectFit: "cover" }} />
+                        <Image src={getImageUrl(item.imageUrl || item.img)} alt={item.name} fill style={{ objectFit: "cover" }} />
                       </div>
                     </Link>
                     {/* Details */}
@@ -649,7 +643,7 @@ export default function CartPage() {
                     transform: hoverRec === item.id ? "translateY(-4px)" : "none",
                   }}>
                     <div style={{ aspectRatio: "4/3", position: "relative", overflow: "hidden" }}>
-                      <Image src={item.img} alt={item.name} fill style={{ objectFit: "cover", transition: "transform 0.5s ease", transform: hoverRec === item.id ? "scale(1.04)" : "scale(1)" }} />
+                      <Image src={getImageUrl(item.imageUrl || item.img)} alt={item.name} fill style={{ objectFit: "cover", transition: "transform 0.5s ease", transform: hoverRec === item.id ? "scale(1.04)" : "scale(1)" }} />
                       <button onClick={e => e.preventDefault()}
                         style={{
                           position: "absolute", bottom: "0.75rem", left: "50%", transform: "translateX(-50%)",

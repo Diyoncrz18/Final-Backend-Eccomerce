@@ -1,28 +1,18 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AdminTopbar, AdminPageHeader, AdminTable, AdminTr, AdminTd, AdminBtn, AdminSearch, OrderStatusBadge, formatRp } from "../components";
+import { fetchAdminOrders, updateOrderStatus } from "../../../services/api";
 
 /* ─── Types ─── */
-type OrderStatus = "menunggu" | "dikemas" | "dikirim" | "selesai" | "dibatalkan";
+type OrderStatus = "MENUNGGU" | "DIKEMAS" | "DIKIRIM" | "SELESAI" | "DIBATALKAN";
 
 interface Order {
-  id: string; customer: string; email: string; items: string;
-  total: number; status: OrderStatus; date: string;
-  trackingNo?: string; courier?: string; estimasi?: string;
+  id: number; orderNumber: string; customerName: string; customer?: string; userEmail: string; items: string;
+  total: number; status: string; createdAt: string;
+  trackingNo?: string; shippingNo?: string; courier?: string; estimasi?: string;
 }
 
-/* ─── Mock Data ─── */
-const ORDERS: Order[] = [
-  { id: "MSN-20250418-001", customer: "Budi Santoso", email: "budi@email.com", items: "Bouclé Armchair, Marble Side Table", total: 9760000, status: "dikirim", date: "18 Apr 2025", trackingNo: "JNE-7123456789", courier: "JNE Express", estimasi: "20–22 Apr 2025" },
-  { id: "MSN-20250415-002", customer: "Anisa Rahma", email: "anisa@email.com", items: "Olive Linen Sofa", total: 12500000, status: "dikemas", date: "15 Apr 2025" },
-  { id: "MSN-20250414-006", customer: "Yoga Prasetyo", email: "yoga@email.com", items: "Japandi Floor Lamp (2×)", total: 3700000, status: "menunggu", date: "14 Apr 2025" },
-  { id: "MSN-20250408-003", customer: "Reza Fauzi", email: "reza@email.com", items: "Ceramic Statement Vase (2×), Rattan Wall Panel", total: 4800000, status: "selesai", date: "8 Apr 2025", trackingNo: "JNE-6099872341", courier: "JNE Express" },
-  { id: "MSN-20250328-004", customer: "Dewi Sartika", email: "dewi@email.com", items: "Oak Dining Table", total: 9800000, status: "selesai", date: "28 Mar 2025", trackingNo: "SiCepat-4521897360", courier: "SiCepat" },
-  { id: "MSN-20250320-007", customer: "Putri Handayani", email: "putri@email.com", items: "Travertine Coffee Table", total: 8900000, status: "selesai", date: "20 Mar 2025" },
-  { id: "MSN-20250312-005", customer: "Citra Wulandari", email: "citra@email.com", items: "Velvet Accent Chair", total: 5040000, status: "dibatalkan", date: "12 Mar 2025" },
-  { id: "MSN-20250308-008", customer: "Hendra Gunawan", email: "hendra@email.com", items: "Wabi-Sabi Vase Set, Rattan Pendant Lamp", total: 3850000, status: "dibatalkan", date: "8 Mar 2025" },
-];
-
+/* ─── API Status Mapping ─── */
 const STATUS_TABS: { key: string; label: string }[] = [
   { key: "semua", label: "Semua" },
   { key: "menunggu", label: "Menunggu" },
@@ -108,7 +98,7 @@ function TrackingModal({ order, onClose }: { order: Order; onClose: () => void }
 
 /* ─── Status Update ─── */
 function StatusModal({ order, onClose }: { order: Order; onClose: () => void }) {
-  const pipeline: OrderStatus[] = ["menunggu", "dikemas", "dikirim", "selesai"];
+  const pipeline: OrderStatus[] = ["MENUNGGU", "DIKEMAS", "DIKIRIM", "SELESAI"];
   const currentIdx = pipeline.indexOf(order.status as OrderStatus);
 
   return (
@@ -175,17 +165,33 @@ export default function AdminPesananPage() {
   const [activeStatus, setActiveStatus] = useState("semua");
   const [trackingOrder, setTrackingOrder] = useState<Order | null>(null);
   const [statusOrder, setStatusOrder] = useState<Order | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = ORDERS.filter((o) => {
+  useEffect(() => {
+    async function loadOrders() {
+      try {
+        const data = await fetchAdminOrders();
+        setOrders(data);
+      } catch (error) {
+        console.error("Failed to load orders:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadOrders();
+  }, []);
+
+  const filtered = orders.filter((o) => {
     const matchSearch =
-      o.id.toLowerCase().includes(search.toLowerCase()) ||
-      o.customer.toLowerCase().includes(search.toLowerCase());
+      o.orderNumber?.toString().toLowerCase().includes(search.toLowerCase()) ||
+      o.customerName?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = activeStatus === "semua" || o.status === activeStatus;
     return matchSearch && matchStatus;
   });
 
   const counts = STATUS_TABS.reduce((acc, t) => {
-    acc[t.key] = t.key === "semua" ? ORDERS.length : ORDERS.filter((o) => o.status === t.key).length;
+    acc[t.key] = t.key === "semua" ? orders.length : orders.filter((o) => o.status === t.key).length;
     return acc;
   }, {} as Record<string, number>);
 
@@ -210,7 +216,7 @@ export default function AdminPesananPage() {
         <AdminPageHeader
           tag="Transaksi"
           title="Manajemen Pesanan"
-          subtitle={`${ORDERS.length} pesanan total · ${counts.menunggu} menunggu proses`}
+          subtitle={`${orders.length} pesanan total · ${counts.menunggu} menunggu proses`}
         />
 
         {/* Status Tabs */}
@@ -266,12 +272,12 @@ export default function AdminPesananPage() {
               <AdminTd>
                 <div>
                   <div style={{ fontWeight: 500, color: "#1A1714", fontSize: "0.82rem" }}>{o.customer}</div>
-                  <div style={{ fontSize: "0.65rem", color: "#B8AFA0" }}>{o.email}</div>
+                  <div style={{ fontSize: "0.65rem", color: "#B8AFA0" }}>{o.userEmail}</div>
                 </div>
               </AdminTd>
               <AdminTd muted>{o.items}</AdminTd>
               <AdminTd bold>{formatRp(o.total)}</AdminTd>
-              <AdminTd muted>{o.date}</AdminTd>
+              <AdminTd muted>{o.createdAt}</AdminTd>
               <AdminTd><OrderStatusBadge status={o.status} /></AdminTd>
               <AdminTd>
                 <div style={{ display: "flex", gap: "0.4rem" }}>
@@ -287,7 +293,7 @@ export default function AdminPesananPage() {
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1.25rem" }}>
           <span style={{ fontSize: "0.75rem", color: "#8A8078" }}>
-            Menampilkan {filtered.length} dari {ORDERS.length} pesanan
+            Menampilkan {filtered.length} dari {orders.length} pesanan
           </span>
           <div style={{ display: "flex", gap: "0.35rem" }}>
             {[1, 2].map((p) => (

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import NavbarUser from "../../components/NavbarUser";
+import { updateUserProfile, getStoredUser as getStoredUserAPI } from "../../../services/api";
 
 const DEFAULT_USER = {
   name: "Budi Santoso",
@@ -347,7 +348,17 @@ export default function ProfilePage() {
                       Batal
                     </button>
                     <button
-                      onClick={() => setEditMode(false)}
+                      onClick={async () => {
+                        try {
+                          const result = await updateUserProfile({ name: formData.name, phone: formData.phone });
+                          if (result.success) {
+                            localStorage.setItem('user', JSON.stringify({ ...user, name: formData.name, phone: formData.phone }));
+                          }
+                        } catch (error) {
+                          console.error("Failed to update profile:", error);
+                        }
+                        setEditMode(false);
+                      }}
                       style={{ padding: "0.7rem 1.75rem", background: "var(--copper)", border: "none", color: "var(--white)", fontFamily: "var(--font-body)", fontSize: "0.78rem", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 500, cursor: "pointer" }}
                     >
                       Simpan Perubahan

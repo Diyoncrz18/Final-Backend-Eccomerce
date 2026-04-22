@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import NavbarUser from "../components/NavbarUser";
-import { getMyOrders, fetchProducts, getAuthToken, getLocalCart } from "../../services/api";
+import { getMyOrders, fetchProducts, getAuthToken, getLocalCart, getImageUrl } from "../../services/api";
 
 /* ─────────────── Default Data ─────────────── */
 const DEFAULT_USER = {
@@ -463,7 +463,7 @@ export default function DashboardPage() {
                           lineHeight: 1,
                         }}
                       >
-                        {USER.points.toLocaleString()}
+                        {USER.points?.toLocaleString() || "0"}
                       </p>
                       <p
                         style={{
@@ -477,7 +477,7 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <p style={{ fontSize: "0.72rem", color: "rgba(245,240,232,0.45)" }}>
-                      / {USER.pointsNext.toLocaleString()} Platinum
+                      / {(USER.pointsNext || 1000).toLocaleString()} Platinum
                     </p>
                   </div>
 
@@ -508,7 +508,7 @@ export default function DashboardPage() {
                       textAlign: "right",
                     }}
                   >
-                    {USER.pointsNext - USER.points} poin lagi ke Platinum
+                    {(USER.pointsNext || 1000) - (USER.points || 0)} poin lagi ke Platinum
                   </p>
                 </div>
 
@@ -552,7 +552,6 @@ export default function DashboardPage() {
               { label: "Pesanan Saya", count: "3 Aktif", href: "/dashboard/orders", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" /><path d="M16 3H8v4h8V3z" /></svg> },
               { label: "Wishlist", count: "4 Produk", href: "/dashboard/wishlist", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg> },
               { label: "Poin Saya", count: "2.450 Poin", href: "/dashboard/rewards", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" /></svg> },
-              { label: "Konsultasi", count: "Gratis 1x", href: "/dashboard/consult", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg> },
             ].map((item, i) => (
               <Link
                 key={item.label}
@@ -565,7 +564,7 @@ export default function DashboardPage() {
                   justifyContent: "center",
                   gap: "0.6rem",
                   padding: "1.75rem 1rem",
-                  borderRight: i < 3 ? "1px solid var(--stone-light)" : "none",
+                  borderRight: i < 2 ? "1px solid var(--stone-light)" : "none",
                   color: "var(--charcoal)",
                   transition: "background 0.25s ease",
                   textAlign: "center",
@@ -705,7 +704,7 @@ export default function DashboardPage() {
                         flexShrink: 0,
                       }}
                     >
-                      <Image src={order.img} alt={order.product} fill style={{ objectFit: "cover" }} />
+                      <Image src={getImageUrl(order.img)} alt={order.product} fill style={{ objectFit: "cover" }} />
                     </div>
 
                     {/* Info */}
@@ -881,7 +880,7 @@ export default function DashboardPage() {
                       overflow: "hidden",
                     }}
                   >
-                    <Image src={item.img} alt={item.name} fill style={{ objectFit: "cover", transition: "transform 0.5s ease" }} />
+                    <Image src={getImageUrl(item.img)} alt={item.name} fill style={{ objectFit: "cover", transition: "transform 0.5s ease" }} />
 
                     {/* Tags */}
                     {item.tag && (
@@ -1067,7 +1066,7 @@ export default function DashboardPage() {
                   }}
                 >
                   <div style={{ aspectRatio: "1/1", position: "relative", background: "var(--bone)", overflow: "hidden" }}>
-                    <Image src={item.img} alt={item.name} fill style={{ objectFit: "cover" }} />
+                    <Image src={getImageUrl(item.img)} alt={item.name} fill style={{ objectFit: "cover" }} />
                     {item.tag && (
                       <span
                         style={{

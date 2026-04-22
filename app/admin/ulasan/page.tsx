@@ -1,15 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AdminTopbar, AdminPageHeader, AdminTable, AdminTr, AdminTd, AdminBtn, AdminSearch } from "../components";
-
-const REVIEWS = [
-  { id: 1, product: "Bouclé Armchair", customer: "Anisa R.", rating: 5, text: "Kualitasnya luar biasa. Kain bouclé-nya sangat lembut dan tidak berbulu.", verified: true, date: "12 Apr 2025", status: "approved" },
-  { id: 2, product: "Bouclé Armchair", customer: "Bagas P.", rating: 5, text: "Pengirimannya cepat dan pengemasan sangat aman. Kursinya persis seperti foto.", verified: true, date: "28 Mar 2025", status: "approved" },
-  { id: 3, product: "Marble Side Table", customer: "Citra W.", rating: 4, text: "Desainnya cantik dan elegan. Sedikit lebih kecil dari ekspektasi.", verified: true, date: "15 Mar 2025", status: "pending" },
-  { id: 4, product: "Oak Dining Table", customer: "Reza F.", rating: 5, text: "Worth every penny! Ini furniture terbaik yang pernah saya beli.", verified: false, date: "2 Mar 2025", status: "pending" },
-  { id: 5, product: "Velvet Accent Chair", customer: "User Anonim", rating: 1, text: "Produk palsu! Tidak sesuai foto!!!!", verified: false, date: "1 Mar 2025", status: "flagged" },
-  { id: 6, product: "Ceramic Statement Vase", customer: "Dewi S.", rating: 5, text: "Sangat cantik untuk dekorasi ruang tamu. Packaging sangat baik.", verified: true, date: "20 Feb 2025", status: "approved" },
-];
+import { fetchAdminReviews } from "../../../services/api";
 
 const STATUS_COLORS: Record<string, { color: string; bg: string }> = {
   approved: { color: "#16A34A", bg: "rgba(22,163,74,0.08)" },
@@ -30,16 +22,41 @@ function Stars({ n }: { n: number }) {
 }
 
 export default function AdminUlasanPage() {
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("semua");
 
-  const filtered = REVIEWS.filter((r) => {
+  useEffect(() => {
+    async function loadReviews() {
+      try {
+        const data = await fetchAdminReviews(0, 50);
+        setReviews(data.map((r: any) => ({
+          id: r.id,
+          product: r.product?.name || "Unknown Product",
+          customer: r.user?.name || "Anonymous",
+          rating: r.rating,
+          text: r.comment || "",
+          verified: r.verified || false,
+          date: r.createdAt ? new Date(r.createdAt).toLocaleDateString("id-ID") : "-",
+          status: r.isApproved ? "approved" : "pending",
+        })));
+      } catch (error) {
+        console.error("Failed to load reviews:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadReviews();
+  }, []);
+
+  const filtered = reviews.filter((r: any) => {
     const matchSearch = r.product.toLowerCase().includes(search.toLowerCase()) || r.customer.toLowerCase().includes(search.toLowerCase());
     const matchFilter = activeFilter === "semua" || r.status === activeFilter;
     return matchSearch && matchFilter;
   });
 
-  const counts = { semua: REVIEWS.length, pending: REVIEWS.filter(r => r.status === "pending").length, approved: REVIEWS.filter(r => r.status === "approved").length, flagged: REVIEWS.filter(r => r.status === "flagged").length };
+  const counts = { semua: reviews.length, pending: reviews.filter((r: any) => r.status === "pending").length, approved: reviews.filter((r: any) => r.status === "approved").length, flagged: reviews.filter((r: any) => r.status === "flagged").length };
 
   return (
     <>

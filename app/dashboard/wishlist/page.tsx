@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../../components/NavbarUser";
-import { getWishlist, removeFromWishlist, getAuthToken, fetchProducts } from "../../../services/api";
+import { getWishlist, removeFromWishlist, getAuthToken, fetchProducts, getImageUrl } from "../../../services/api";
 
 function getStoredUser() {
   if (typeof window === 'undefined') return { name: "Guest", email: "", tier: "Bronze", points: 0 };
@@ -13,16 +13,16 @@ function getStoredUser() {
 
 interface WishItem {
   id: number; name: string; category: string; price: number; origPrice?: number;
-  img: string; rating: number; stock: number; addedDate: string;
+  img: string; imageUrl?: string; rating: number; stock: number; addedDate: string;
 }
 
 const WISHLIST_DEFAULT: WishItem[] = [];
 
-const RECOMMENDED_MOCK = [
-  { id: 1, name: "Bouclé Armchair", price: 6400000, img: "/product-chair.png", rating: 4.9 },
-  { id: 2, name: "Olive Linen Sofa", price: 12500000, img: "/product-sofa.png", rating: 4.8 },
-  { id: 7, name: "Ceramic Statement Vase", price: 1350000, img: "/product-ceramic-vase.png", rating: 4.9 },
-  { id: 6, name: "Rattan Pendant Lamp", price: 2750000, img: "/product-lamp.png", rating: 4.8 },
+const RECOMMENDED_MOCK: any[] = [
+  { id: 1, name: "Bouclé Armchair", price: 6400000, img: "/product-chair.png", imageUrl: "/product-chair.png", rating: 4.9 },
+  { id: 2, name: "Olive Linen Sofa", price: 12500000, img: "/product-sofa.png", imageUrl: "/product-sofa.png", rating: 4.8 },
+  { id: 7, name: "Ceramic Statement Vase", price: 1350000, img: "/product-ceramic-vase.png", imageUrl: "/product-ceramic-vase.png", rating: 4.9 },
+  { id: 6, name: "Rattan Pendant Lamp", price: 2750000, img: "/product-lamp.png", imageUrl: "/product-lamp.png", rating: 4.8 },
 ];
 
 function formatRp(n: number) { return "Rp " + n.toLocaleString("id-ID"); }
@@ -244,7 +244,7 @@ export default function WishlistPage() {
                     {/* Image */}
                     <Link href={`/product/${item.id}`} style={{ display: "block" }}>
                       <div style={{ aspectRatio: "1/1", position: "relative", overflow: "hidden", background: "var(--bone)" }}>
-                        <Image src={item.img} alt={item.name} fill
+                        <Image src={getImageUrl(item.imageUrl || item.img)} alt={item.name} fill
                           style={{ objectFit: "cover", transition: "transform 0.5s ease", transform: hovered === item.id ? "scale(1.04)" : "scale(1)" }} />
                         {/* Low stock */}
                         {item.stock <= 3 && (
@@ -343,7 +343,7 @@ export default function WishlistPage() {
                   boxShadow: hoveredRec === r.id ? "0 8px 28px rgba(42,38,32,0.1)" : "none",
                 }}>
                   <div style={{ aspectRatio: "4/3", position: "relative", background: "var(--bone)", overflow: "hidden" }}>
-                    <Image src={r.img} alt={r.name} fill style={{ objectFit: "cover", transform: hoveredRec === r.id ? "scale(1.04)" : "scale(1)", transition: "transform 0.5s ease" }} />
+                    <Image src={getImageUrl(r.imageUrl || r.img)} alt={r.name} fill style={{ objectFit: "cover", transform: hoveredRec === r.id ? "scale(1.04)" : "scale(1)", transition: "transform 0.5s ease" }} />
                   </div>
                   <div style={{ padding: "0.9rem 1rem" }}>
                     <p style={{ fontFamily: "var(--font-display)", fontSize: "0.9rem", fontWeight: 300, color: "var(--charcoal)", marginBottom: "0.35rem" }}>{r.name}</p>

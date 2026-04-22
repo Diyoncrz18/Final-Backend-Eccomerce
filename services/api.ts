@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8081/api/v1';
+ const API_BASE_URL = 'http://localhost:8081/api/v1';
 
 export interface User {
   id: number;
@@ -246,6 +246,22 @@ export function setAuthToken(token: string): void {
 export function removeAuthToken(): void {
   localStorage.removeItem('authToken');
   localStorage.removeItem('user');
+}
+
+// Helper functions for safe data handling
+export function getImageUrl(img?: string): string {
+  if (img && img.length > 0 && !img.includes('undefined') && !img.includes('null')) {
+    return img;
+  }
+  return "/product-chair.png";
+}
+
+export function getSafePoints(points?: number): number {
+  return points || 0;
+}
+
+export function getSafeTier(tier?: string): string {
+  return tier || "REGULAR";
 }
 
 // Cart functions
@@ -603,5 +619,170 @@ export async function updateUserProfile(data: {
     return await response.json();
   } catch (error: any) {
     return { success: false, message: error.message };
+  }
+}
+
+export function getStoredUser(): { name: string; email: string; tier: string; points: number } {
+  if (typeof window === 'undefined') {
+    return { name: "Guest", email: "", tier: "Bronze", points: 0 };
+  }
+  const saved = localStorage.getItem('user');
+  if (saved) {
+    try {
+      const user = JSON.parse(saved);
+      return {
+        name: user.name || "Guest",
+        email: user.email || "",
+        tier: user.tier || "Bronze",
+        points: user.points || 0,
+      };
+    } catch {
+      return { name: "Guest", email: "", tier: "Bronze", points: 0 };
+    }
+  }
+  return { name: "Guest", email: "", tier: "Bronze", points: 0 };
+}
+
+export function isAdmin(): boolean {
+  if (typeof window === 'undefined') return false;
+  const saved = localStorage.getItem('user');
+  if (saved) {
+    try {
+      const user = JSON.parse(saved);
+      return user.role === 'ROLE_ADMIN' || user.roles?.includes('ROLE_ADMIN');
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+export async function fetchAdminUsers(page = 0, size = 20, search?: string) {
+  try {
+    const token = getAuthToken();
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    if (search) params.append('search', search);
+    const response = await fetch(`${API_BASE_URL}/admin/users?${params}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to fetch users');
+    const data = await response.json();
+    return data.content || [];
+  } catch (error) {
+    console.error('Error fetching admin users:', error);
+    return [];
+  }
+}
+
+export async function fetchAdminOrders(page = 0, size = 20, status?: string) {
+  try {
+    const token = getAuthToken();
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    if (status) params.append('status', status);
+    const response = await fetch(`${API_BASE_URL}/orders?${params}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to fetch orders');
+    const data = await response.json();
+    return data.content || [];
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    return [];
+  }
+}
+
+export async function updateOrderStatus(orderId: number, status: string) {
+  try {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/orders/${orderId}/status?status=${status}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to update order');
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating order:', error);
+    return { success: false };
+  }
+}
+
+export async function fetchAdminReviews(page = 0, size = 20) {
+  try {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/reviews?page=${page}&size=${size}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to fetch reviews');
+    const data = await response.json();
+    return data.content || [];
+  } catch (error) {
+    console.error('Error fetching reviews:', error);
+    return [];
+  }
+}
+
+export async function updateReviewStatus(reviewId: number, status: string) {
+  try {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/reviews/${reviewId}/status`, {
+      method: 'PUT',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status }),
+    });
+    if (!response.ok) throw new Error('Failed to update review');
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating review:', error);
+    return { success: false };
+  }
+}
+
+export async function fetchRewardsConfig() {
+  try {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/admin/rewards`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to fetch rewards config');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching rewards config:', error);
+    return {};
+  }
+}
+
+export async function fetchStoreSettings() {
+  try {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/admin/settings`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to fetch settings');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching settings:', error);
+    return {};
+  }
+}
+
+export async function updateStoreSettings(settings: any) {
+  try {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/admin/settings`, {
+      method: 'PUT',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(settings),
+    });
+    if (!response.ok) throw new Error('Failed to update settings');
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating settings:', error);
+    return { success: false };
   }
 }

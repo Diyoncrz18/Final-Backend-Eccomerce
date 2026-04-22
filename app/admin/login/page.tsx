@@ -74,16 +74,54 @@ export default function AdminLoginPage() {
 
     setLoading(true);
 
-    // Simulate API delay
-    await new Promise((r) => setTimeout(r, 1200));
+    try {
+      const response = await fetch("http://localhost:8081/api/v1/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-    // Demo credentials
-    if (email === "admin@maison.id" && password === "admin123") {
+      const data = await response.json();
+
+      if (!response.ok || !data.status) {
+        setError(data.message || "Email atau password salah.");
+        setLoading(false);
+        return;
+      }
+
+      const token = data.payload?.accessToken;
+      const user = data.payload?.user;
+
+      if (!user || !token) {
+        setError("Login gagal. Silakan coba lagi.");
+        setLoading(false);
+        return;
+      }
+
+      const roles = user.roles || [];
+      const isAdmin = roles.includes("ROLE_ADMIN");
+
+      if (!isAdmin) {
+        setError("Anda tidak memiliki akses admin.");
+        setLoading(false);
+        return;
+      }
+
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: roles[0],
+        roles: roles,
+        tier: user.tier || "REGULAR",
+        points: user.points || 0,
+      }));
       localStorage.setItem("maison_admin_auth", "true");
-      localStorage.setItem("maison_admin_name", "Admin Maison");
+
       router.replace("/admin");
-    } else {
-      setError("Email atau password salah. Silakan coba lagi.");
+    } catch (err) {
+      setError("Terjadi kesalahan. Silakan coba lagi.");
       setLoading(false);
     }
   };

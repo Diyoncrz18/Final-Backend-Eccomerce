@@ -1,39 +1,55 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { AdminTopbar, AdminPageHeader, AdminTable, AdminTr, AdminTd, AdminBtn, AdminSearch, formatRp } from "../components";
+import { fetchProducts, getAuthToken } from "../../../services/api";
 
 /* ─── Types ─── */
 interface Product {
-  id: number; sku: string; name: string; category: string; collection: string;
+  id: number; sku: string; name: string; category: any; collection: any;
   price: number; salePrice: number | null; stock: number;
-  isActive: boolean; isNew: boolean; img: string; rating: number;
+  isActive: boolean; isNew: boolean; imageUrl: string; rating: number;
 }
 
-/* ─── Mock Data ─── */
-const PRODUCTS: Product[] = [
-  { id: 1, sku: "MSN-CHAIR-001", name: "Bouclé Armchair", category: "Kursi", collection: "Spring 2025", price: 6400000, salePrice: null, stock: 8, isActive: true, isNew: false, img: "/product-chair.png", rating: 4.9 },
-  { id: 2, sku: "MSN-SOFA-002", name: "Olive Linen Sofa", category: "Kursi", collection: "Classic", price: 12500000, salePrice: null, stock: 3, isActive: true, isNew: false, img: "/product-sofa.png", rating: 4.8 },
-  { id: 3, sku: "MSN-CHAIR-003", name: "Velvet Accent Chair", category: "Kursi", collection: "Sale", price: 7200000, salePrice: 5040000, stock: 5, isActive: true, isNew: false, img: "/product-velvet-chair.png", rating: 4.7 },
-  { id: 4, sku: "MSN-TABLE-004", name: "Marble Side Table", category: "Meja", collection: "Stone Series", price: 4800000, salePrice: 3360000, stock: 3, isActive: true, isNew: false, img: "/product-marble-table.png", rating: 4.9 },
-  { id: 5, sku: "MSN-TABLE-005", name: "Oak Dining Table", category: "Meja", collection: "Nordic", price: 9800000, salePrice: null, stock: 2, isActive: true, isNew: false, img: "/product-table.png", rating: 4.8 },
-  { id: 6, sku: "MSN-TABLE-006", name: "Travertine Coffee Table", category: "Meja", collection: "Stone Series", price: 8900000, salePrice: null, stock: 6, isActive: true, isNew: true, img: "/product-table.png", rating: 4.6 },
-  { id: 7, sku: "MSN-LAMP-007", name: "Rattan Pendant Lamp", category: "Lampu", collection: "Artisan", price: 2750000, salePrice: null, stock: 12, isActive: true, isNew: false, img: "/product-lamp.png", rating: 4.8 },
-  { id: 8, sku: "MSN-LAMP-008", name: "Japandi Floor Lamp", category: "Lampu", collection: "Artisan", price: 1850000, salePrice: null, stock: 6, isActive: true, isNew: true, img: "/product-lamp.png", rating: 5.0 },
-  { id: 9, sku: "MSN-DECO-009", name: "Ceramic Statement Vase", category: "Dekorasi", collection: "Wabi-Sabi", price: 1350000, salePrice: 945000, stock: 20, isActive: true, isNew: true, img: "/product-ceramic-vase.png", rating: 4.9 },
-  { id: 10, sku: "MSN-DECO-010", name: "Wabi-Sabi Vase Set", category: "Dekorasi", collection: "Wabi-Sabi", price: 1100000, salePrice: null, stock: 15, isActive: true, isNew: false, img: "/product-ceramic-vase.png", rating: 4.7 },
-  { id: 11, sku: "MSN-DECO-011", name: "Rattan Wall Panel", category: "Dekorasi", collection: "Artisan", price: 2100000, salePrice: 1470000, stock: 8, isActive: true, isNew: false, img: "/product-rattan-wall.png", rating: 4.8 },
-  { id: 12, sku: "MSN-DECO-012", name: "Linen Throw Pillow Set", category: "Dekorasi", collection: "Classic", price: 680000, salePrice: null, stock: 30, isActive: false, isNew: false, img: "/product-ceramic-vase.png", rating: 4.7 },
-];
-
-const CATEGORIES = ["semua", "Kursi", "Meja", "Lampu", "Dekorasi", "Penyimpanan"];
+/* ─── Categories from mock ─── */
+const CATEGORIES = ["semua", "Kursi", "Meja", "Lampu", "Dekorasi", "Penyimpananan"];
 
 export default function AdminProdukPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("semua");
   const [activeStatus, setActiveStatus] = useState("semua");
 
-  const filtered = PRODUCTS.filter((p) => {
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        const data = await fetchProducts(0, 100);
+        setProducts(data.map((p: any) => ({
+          id: p.id,
+          sku: p.sku,
+          name: p.name,
+          category: p.category?.name || "Unknown",
+          collection: p.collection?.name || "",
+          price: Number(p.price),
+          salePrice: p.salePrice ? Number(p.salePrice) : null,
+          stock: p.stock,
+          isActive: p.isActive,
+          isNew: p.isNew,
+          imageUrl: p.imageUrl,
+          rating: Number(p.rating) || 0,
+        })));
+      } catch (error) {
+        console.error("Failed to load products:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProducts();
+  }, []);
+
+  const activeProducts = products.filter(p => p.isActive);
+  const filtered = products.filter((p: Product) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase());
     const matchCat = activeCategory === "semua" || p.category === activeCategory;
     const matchStatus = activeStatus === "semua" || (activeStatus === "aktif" ? p.isActive : !p.isActive);
@@ -60,7 +76,7 @@ export default function AdminProdukPage() {
         <AdminPageHeader
           tag="Katalog"
           title="Manajemen Produk"
-          subtitle={`${PRODUCTS.length} produk tercatat · ${PRODUCTS.filter(p => p.isActive).length} aktif`}
+          subtitle={`${products.length} produk tercatat · ${activeProducts.length} aktif`}
         />
 
         {/* ── Filters ── */}
@@ -133,7 +149,7 @@ export default function AdminProdukPage() {
                 <AdminTd>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
                     <div style={{ width: "44px", height: "44px", background: "#F4F0EA", flexShrink: 0, overflow: "hidden", border: "1px solid #E4DDD3" }}>
-                      <img src={p.img} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <img src={p.imageUrl} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     </div>
                     <div>
                       <div style={{ fontSize: "0.85rem", fontWeight: 500, color: "#1A1714", marginBottom: "0.15rem" }}>{p.name}</div>
@@ -211,7 +227,7 @@ export default function AdminProdukPage() {
         {/* Pagination */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1.25rem" }}>
           <span style={{ fontSize: "0.75rem", color: "#8A8078" }}>
-            Menampilkan {filtered.length} dari {PRODUCTS.length} produk
+            Menampilkan {filtered.length} dari {products.length} produk
           </span>
           <div style={{ display: "flex", gap: "0.35rem" }}>
             {[1, 2, 3].map((p) => (

@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../../components/NavbarUser";
-import { getMyOrders, getAuthToken } from "../../../services/api";
+import { getMyOrders, getAuthToken, getImageUrl } from "../../../services/api";
 
 function getStoredUser() {
   if (typeof window === 'undefined') return { name: "Guest", email: "", tier: "Bronze", points: 0 };
@@ -14,7 +14,7 @@ function getStoredUser() {
 /* ─────────── Types ─────────── */
 type OrderStatus = "menunggu" | "dikemas" | "dikirim" | "selesai" | "dibatalkan";
 
-interface OrderItem { id: number; name: string; variant: string; qty: number; price: number; img: string }
+interface OrderItem { id: number; name: string; variant: string; qty: number; price: number; img: string; imageUrl?: string }
 interface Order {
   id: string; date: string; status: OrderStatus; items: OrderItem[];
   total: number; shipping: number; trackingNo?: string; estimasi?: string; courier?: string;
@@ -25,21 +25,6 @@ interface Order {
 const ORDER_MOCK: Order[] = [];
 
 const ORDERS = ORDER_MOCK;
-    id: "MSN-20250328-004", date: "28 Mar 2025", status: "selesai",
-    items: [
-      { id: 5, name: "Oak Dining Table", variant: "Natural Oak", qty: 1, price: 9800000, img: "/product-table.png" },
-    ],
-    total: 9800000, shipping: 0,
-  },
-  {
-    id: "MSN-20250312-005", date: "12 Mar 2025", status: "dibatalkan",
-    cancelReason: "Pembayaran tidak berhasil dalam 24 jam",
-    items: [
-      { id: 3, name: "Velvet Accent Chair", variant: "Dusty Rose", qty: 1, price: 5040000, img: "/product-velvet-chair.png" },
-    ],
-    total: 5040000, shipping: 0,
-  },
-];
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: string }> = {
   menunggu:    { label: "Menunggu Pembayaran", color: "#B45309", bg: "rgba(180,83,9,0.08)" },
@@ -120,6 +105,7 @@ function TrackingBar({ status }: { status: OrderStatus }) {
 
 /* ─────────── Page ─────────── */
 export default function OrdersPage() {
+  const user = getStoredUser();
   const [activeFilter, setActiveFilter] = useState<"semua" | OrderStatus>("semua");
   const [expandedTracking, setExpandedTracking] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>(ORDER_MOCK);
@@ -223,7 +209,7 @@ export default function OrdersPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bone)" }}>
-      <NavbarUser user={USER} />
+      <NavbarUser user={user} />
 
       {/* ── Header ── */}
       <div style={{ background: "var(--white)", borderBottom: "1px solid var(--stone-light)", paddingTop: "72px" }}>
@@ -352,7 +338,7 @@ export default function OrdersPage() {
                       }}>
                         <Link href={`/product/${item.id}`} style={{ flexShrink: 0 }}>
                           <div style={{ width: "68px", height: "68px", position: "relative", overflow: "hidden", background: "var(--bone)", border: "1px solid var(--stone-light)" }}>
-                            <Image src={item.img} alt={item.name} fill style={{ objectFit: "cover" }} />
+                            <Image src={getImageUrl(item.imageUrl || item.img)} alt={item.name} fill style={{ objectFit: "cover" }} />
                           </div>
                         </Link>
                         <div style={{ flex: 1 }}>

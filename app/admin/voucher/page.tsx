@@ -1,26 +1,37 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AdminTopbar, AdminPageHeader, AdminTable, AdminTr, AdminTd, AdminBtn } from "../components";
-
-const VOUCHERS = [
-  { id: 1, code: "MAISON25", type: "persen", value: 25, minOrder: 5000000, used: 12, limit: 50, expiry: "30 Apr 2025", isActive: true },
-  { id: 2, code: "FREESHIP", type: "nominal", value: 100000, minOrder: 2000000, used: 38, limit: 100, expiry: "20 Apr 2025", isActive: true },
-  { id: 3, code: "GOLD10", type: "persen", value: 10, minOrder: 0, used: 52, limit: 999, expiry: "31 Dec 2025", isActive: true },
-  { id: 4, code: "FLASH30", type: "persen", value: 30, minOrder: 3000000, used: 50, limit: 50, expiry: "15 Apr 2025", isActive: false },
-];
-
-const REDEEM_OPTIONS = [
-  { id: 1, title: "Voucher Diskon Rp 50.000", pts: 500, used: 34, isActive: true },
-  { id: 2, title: "Voucher Gratis Ongkir", pts: 750, used: 28, isActive: true },
-  { id: 3, title: "Diskon 10% (Katalog Baru)", pts: 1000, used: 15, isActive: true },
-  { id: 4, title: "Voucher Diskon Rp 250.000", pts: 2000, used: 8, isActive: true },
-  { id: 5, title: "Exclusive Gift Box", pts: 3500, used: 3, isActive: true },
-  { id: 6, title: "Akses Early Sale (VIP)", pts: 5000, used: 1, isActive: false },
-];
+import { getVouchers } from "../../../services/api";
 
 export default function AdminVoucherPage() {
   const [activeTab, setActiveTab] = useState<"voucher" | "rewards">("voucher");
   const [showForm, setShowForm] = useState(false);
+  const [vouchers, setVouchers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadVouchers() {
+      try {
+        const data = await getVouchers();
+        setVouchers(data);
+      } catch (error) {
+        console.error("Failed to load vouchers:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadVouchers();
+  }, []);
+
+  // Static redeem options (can be moved to backend later)
+  const REDEEM_OPTIONS = [
+    { id: 1, title: "Voucher Diskon Rp 50.000", pts: 500, used: 34, isActive: true },
+    { id: 2, title: "Voucher Gratis Ongkir", pts: 750, used: 28, isActive: true },
+    { id: 3, title: "Diskon 10% (Katalog Baru)", pts: 1000, used: 15, isActive: true },
+    { id: 4, title: "Voucher Diskon Rp 250.000", pts: 2000, used: 8, isActive: true },
+    { id: 5, title: "Exclusive Gift Box", pts: 3500, used: 3, isActive: true },
+    { id: 6, title: "Akses Early Sale (VIP)", pts: 5000, used: 1, isActive: false },
+  ];
 
   return (
     <>
@@ -117,7 +128,7 @@ export default function AdminVoucherPage() {
         {/* Voucher Table */}
         {activeTab === "voucher" && (
           <AdminTable columns={["Kode", "Tipe", "Nilai", "Min. Belanja", "Terpakai / Limit", "Kadaluarsa", "Status", "Aksi"]}>
-            {VOUCHERS.map((v) => (
+            {vouchers.map((v) => (
               <AdminTr key={v.id}>
                 <AdminTd>
                   <span style={{ fontFamily: "monospace", fontSize: "0.88rem", fontWeight: 700, color: "#1A1714", letterSpacing: "0.08em" }}>

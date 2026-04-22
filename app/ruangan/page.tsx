@@ -3,18 +3,12 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../components/NavbarUser";
-import { fetchCategories, fetchProducts } from "../../services/api";
+import { fetchCategories, fetchProducts, getImageUrl, getStoredUser } from "../../services/api";
 
-function getStoredUser() {
-  if (typeof window === 'undefined') return { name: "Guest", email: "", tier: "Bronze", points: 0 };
-  const saved = localStorage.getItem('user');
-  return saved ? JSON.parse(saved) : { name: "Guest", email: "", tier: "Bronze", points: 0 };
-}
-
-const INSPIRATIONS = [
-  { title: "Japandi Minimalism", subtitle: "Perpaduan Jepang & Skandinavia", img: "/hero-living.png", tag: "Tren 2025" },
-  { title: "Warm Earthy Tones", subtitle: "Nuansa Bumi yang Hangat", img: "/hero-bedroom.png", tag: "Editor's Pick" },
-  { title: "Modern Mediterranean", subtitle: "Estetika Mediterania Kontemporer", img: "/hero-living.png", tag: "Koleksi Baru" },
+const INSPIRATIONS: any[] = [
+  { title: "Japandi Minimalism", subtitle: "Perpaduan Jepang & Skandinavia", img: "/hero-living.png", imageUrl: "/hero-living.png", tag: "Tren 2025" },
+  { title: "Warm Earthy Tones", subtitle: "Nuansa Bumi yang Hangat", img: "/hero-bedroom.png", imageUrl: "/hero-bedroom.png", tag: "Editor's Pick" },
+  { title: "Modern Mediterranean", subtitle: "Estetika Mediterania Kontemporer", img: "/hero-living.png", imageUrl: "/hero-living.png", tag: "Koleksi Baru" },
 ];
 
 export default function RuanganPage() {
@@ -123,7 +117,7 @@ export default function RuanganPage() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.25rem" }} className="rooms-grid">
-            {ROOMS.map(room => (
+            {rooms.map(room => (
               <Link
                 key={room.id}
                 href={`/ruangan/${room.id}`}
@@ -140,7 +134,7 @@ export default function RuanganPage() {
                 }}>
                   {/* Image */}
                   <div style={{ position: "relative", aspectRatio: "3/2", overflow: "hidden", background: "var(--charcoal)" }}>
-                    <Image src={room.img} alt={room.name} fill style={{
+                    <Image src={getImageUrl(room.imageUrl || room.img)} alt={room.name} fill style={{
                       objectFit: "cover",
                       opacity: 0.75,
                       transition: "transform 0.6s ease, opacity 0.3s ease",
@@ -183,7 +177,7 @@ export default function RuanganPage() {
                       {room.desc}
                     </p>
                     <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "1rem" }}>
-                      {room.products.map(p => (
+                      {room.products.map((p: string) => (
                         <span key={p} style={{
                           padding: "0.2rem 0.65rem", background: "var(--bone)",
                           fontSize: "0.62rem", color: "var(--charcoal-soft)", letterSpacing: "0.06em",
@@ -236,7 +230,7 @@ export default function RuanganPage() {
                   transition: "box-shadow 0.3s ease",
                   boxShadow: hoveredInspir === i ? "0 12px 40px rgba(42,38,32,0.15)" : "none",
                 }}>
-                  <Image src={item.img} alt={item.title} fill style={{
+                  <Image src={getImageUrl(item.img)} alt={item.title} fill style={{
                     objectFit: "cover",
                     transition: "transform 0.6s ease",
                     transform: hoveredInspir === i ? "scale(1.06)" : "scale(1)",

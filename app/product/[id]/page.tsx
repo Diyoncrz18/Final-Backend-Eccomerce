@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import NavbarUser from "../../components/NavbarUser";
-import { fetchProductById } from "../../../services/api";
+import { fetchProductById, getStoredUser, getImageUrl } from "../../../services/api";
 
 /* ─────────── Types ─────────── */
 interface Variant { label: string; hex: string; available: boolean }
@@ -71,14 +71,12 @@ const REVIEWS = [
   { name: "Citra W.", date: "18 Feb 2025", rating: 5, avatar: "CW", verified: true, text: "Pelayanan customer service-nya responsif dan membantu dalam memilih warna yang tepat. Kursinya sangat nyaman untuk baca buku dan kerja dari rumah. Highly recommend!" },
 ];
 
-const RELATED = [
-  { id: "5", name: "Oak Dining Table", price: 9800000, img: "/product-table.png", rating: 4.8 },
-  { id: "6", name: "Rattan Pendant Lamp", price: 2750000, img: "/product-lamp.png", rating: 4.8 },
-  { id: "7", name: "Ceramic Statement Vase", price: 1350000, img: "/product-ceramic-vase.png", rating: 4.9 },
-  { id: "2", name: "Olive Linen Sofa", price: 12500000, img: "/product-sofa.png", rating: 4.8 },
+const RELATED: any[] = [
+  { id: "5", name: "Oak Dining Table", price: 9800000, img: "/product-table.png", imageUrl: "/product-table.png", rating: 4.8 },
+  { id: "6", name: "Rattan Pendant Lamp", price: 2750000, img: "/product-lamp.png", imageUrl: "/product-lamp.png", rating: 4.8 },
+  { id: "7", name: "Ceramic Statement Vase", price: 1350000, img: "/product-ceramic-vase.png", imageUrl: "/product-ceramic-vase.png", rating: 4.9 },
+  { id: "2", name: "Olive Linen Sofa", price: 12500000, img: "/product-sofa.png", imageUrl: "/product-sofa.png", rating: 4.8 },
 ];
-
-const USER = { name: "Budi Santoso", email: "budi@email.com", tier: "Gold Member", points: 2450 };
 
 function formatRp(n: number) {
   return "Rp " + n.toLocaleString("id-ID");
@@ -112,6 +110,7 @@ function RatingBar({ label, count, total }: { label: string; count: number; tota
 
 /* ─────────── Page ─────────── */
 export default function ProductPage() {
+  const user = getStoredUser();
   const { id } = useParams() as { id: string };
   const override = CATALOG[id] ?? {};
   const [productData, setProductData] = useState<any>(null);
@@ -309,7 +308,7 @@ export default function ProductPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bone)" }}>
-      <NavbarUser user={USER} />
+      <NavbarUser user={user} />
 
       {/* ── Breadcrumb ── */}
       <div style={{ background: "var(--white)", borderBottom: "1px solid var(--stone-light)", paddingTop: "72px" }}>
@@ -396,7 +395,7 @@ export default function ProductPage() {
                     }}
                     aria-label={`Gambar ${i + 1}`}
                   >
-                    <Image src={img} alt={`${product.name} ${i+1}`} fill style={{ objectFit: "cover", opacity: activeImg === i ? 1 : 0.65, transition: "opacity 0.2s ease" }} />
+                    <Image src={getImageUrl(img)} alt={`${product.name} ${i+1}`} fill style={{ objectFit: "cover", opacity: activeImg === i ? 1 : 0.65, transition: "opacity 0.2s ease" }} />
                   </button>
                 ))}
               </div>
@@ -803,7 +802,7 @@ export default function ProductPage() {
                   transform: hoverRelated === item.id ? "translateY(-4px)" : "none",
                 }}>
                   <div style={{ aspectRatio: "4/3", position: "relative", background: "var(--bone)", overflow: "hidden" }}>
-                    <Image src={item.img} alt={item.name} fill style={{ objectFit: "cover", transition: "transform 0.5s ease", transform: hoverRelated === item.id ? "scale(1.04)" : "scale(1)" }} />
+                    <Image src={getImageUrl(item.imageUrl || item.img)} alt={item.name} fill style={{ objectFit: "cover", transition: "transform 0.5s ease", transform: hoverRelated === item.id ? "scale(1.04)" : "scale(1)" }} />
                   </div>
                   <div style={{ padding: "1rem 1.1rem" }}>
                     <p style={{ fontFamily: "var(--font-display)", fontSize: "1rem", fontWeight: 300, color: "var(--charcoal)", marginBottom: "0.35rem" }}>

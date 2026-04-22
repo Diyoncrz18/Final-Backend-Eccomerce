@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AdminTopbar, AdminPageHeader, AdminTable, AdminTr, AdminTd, AdminBtn, AdminSearch, formatRp } from "../components";
+import { fetchAdminUsers } from "../../../services/api";
 
-type Tier = "Regular" | "Gold" | "Platinum";
+type Tier = "REGULAR" | "GOLD" | "PLATINUM";
 
 interface User {
   id: number; name: string; email: string; phone: string;
@@ -10,20 +11,10 @@ interface User {
   totalSpend: number; joinDate: string; isActive: boolean;
 }
 
-const USERS: User[] = [
-  { id: 1, name: "Budi Santoso", email: "budi@email.com", phone: "0812-3456-7890", tier: "Gold", points: 2450, totalOrders: 5, totalSpend: 41900000, joinDate: "Jan 2024", isActive: true },
-  { id: 2, name: "Anisa Rahma", email: "anisa@email.com", phone: "0856-7890-1234", tier: "Platinum", points: 8200, totalOrders: 12, totalSpend: 142000000, joinDate: "Mar 2023", isActive: true },
-  { id: 3, name: "Reza Fauzi", email: "reza@email.com", phone: "0821-4567-8901", tier: "Gold", points: 1850, totalOrders: 4, totalSpend: 28700000, joinDate: "Jun 2024", isActive: true },
-  { id: 4, name: "Dewi Sartika", email: "dewi@email.com", phone: "0878-9012-3456", tier: "Regular", points: 480, totalOrders: 2, totalSpend: 14600000, joinDate: "Sep 2024", isActive: true },
-  { id: 5, name: "Citra Wulandari", email: "citra@email.com", phone: "0813-5678-9012", tier: "Regular", points: 120, totalOrders: 1, totalSpend: 5040000, joinDate: "Nov 2024", isActive: false },
-  { id: 6, name: "Hendra Gunawan", email: "hendra@email.com", phone: "0822-6789-0123", tier: "Platinum", points: 12400, totalOrders: 18, totalSpend: 218000000, joinDate: "Feb 2023", isActive: true },
-  { id: 7, name: "Putri Handayani", email: "putri@email.com", phone: "0857-0123-4567", tier: "Gold", points: 3100, totalOrders: 7, totalSpend: 58400000, joinDate: "May 2024", isActive: true },
-];
-
 const TIER_CONFIG: Record<Tier, { color: string; bg: string }> = {
-  Regular: { color: "#6B6560", bg: "rgba(107,101,96,0.08)" },
-  Gold: { color: "#B45309", bg: "rgba(180,83,9,0.08)" },
-  Platinum: { color: "#7C3AED", bg: "rgba(124,58,237,0.08)" },
+  REGULAR: { color: "#6B6560", bg: "rgba(107,101,96,0.08)" },
+  GOLD: { color: "#B45309", bg: "rgba(180,83,9,0.08)" },
+  PLATINUM: { color: "#7C3AED", bg: "rgba(124,58,237,0.08)" },
 };
 
 function PointAdjustModal({ user, onClose }: { user: User; onClose: () => void }) {
@@ -90,11 +81,38 @@ function PointAdjustModal({ user, onClose }: { user: User; onClose: () => void }
 }
 
 export default function AdminPenggunaPage() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeTier, setActiveTier] = useState("semua");
   const [pointUser, setPointUser] = useState<User | null>(null);
 
-  const filtered = USERS.filter((u) => {
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        const data = await fetchAdminUsers(0, 100);
+        setUsers(data.map((u: any) => ({
+          id: u.id,
+          name: u.name || "Unknown",
+          email: u.email || "",
+          phone: u.phone || "",
+          tier: u.tier || "REGULAR",
+          points: u.rewardPoints || 0,
+          totalOrders: u.totalOrders || 0,
+          totalSpend: u.totalSpent || 0,
+          joinDate: u.joinDate ? new Date(u.joinDate).toLocaleDateString("id-ID", { month: "short", year: "numeric" }) : "-",
+          isActive: u.isActive !== false,
+        })));
+      } catch (error) {
+        console.error("Failed to load users:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadUsers();
+  }, []);
+
+  const filtered = users.filter((u) => {
     const matchSearch =
       u.name.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase());
@@ -103,10 +121,10 @@ export default function AdminPenggunaPage() {
   });
 
   const tierCounts = {
-    semua: USERS.length,
-    Regular: USERS.filter((u) => u.tier === "Regular").length,
-    Gold: USERS.filter((u) => u.tier === "Gold").length,
-    Platinum: USERS.filter((u) => u.tier === "Platinum").length,
+    semua: users.length,
+    REGULAR: users.filter((u) => u.tier === "REGULAR").length,
+    GOLD: users.filter((u) => u.tier === "GOLD").length,
+    PLATINUM: users.filter((u) => u.tier === "PLATINUM").length,
   };
 
   return (
@@ -129,12 +147,12 @@ export default function AdminPenggunaPage() {
         <AdminPageHeader
           tag="Anggota"
           title="Manajemen Pengguna"
-          subtitle={`${USERS.length} pengguna terdaftar · ${USERS.filter(u => u.isActive).length} aktif`}
+          subtitle={`${users.length} pengguna terdaftar · ${users.filter(u => u.isActive).length} aktif`}
         />
 
         {/* Tier Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", marginBottom: "2rem" }}>
-          {(["Regular", "Gold", "Platinum"] as Tier[]).map((t) => (
+          {(["REGULAR", "GOLD", "PLATINUM"] as Tier[]).map((t) => (
             <div key={t} style={{ background: "#FAF8F5", border: "1px solid #E4DDD3", padding: "1.25rem 1.5rem", cursor: "pointer", borderLeft: activeTier === t ? `3px solid ${TIER_CONFIG[t].color}` : "3px solid transparent" }}
               onClick={() => setActiveTier(activeTier === t ? "semua" : t)}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem" }}>
@@ -144,7 +162,7 @@ export default function AdminPenggunaPage() {
                 </span>
               </div>
               <div style={{ fontFamily: "var(--font-display)", fontSize: "1.6rem", fontWeight: 300, color: "#1A1714" }}>
-                {USERS.filter(u => u.tier === t).reduce((sum, u) => sum + u.totalSpend, 0).toLocaleString("id-ID", { notation: "compact", maximumFractionDigits: 1 })}
+                {users.filter(u => u.tier === t).reduce((sum, u) => sum + u.totalSpend, 0).toLocaleString("id-ID", { notation: "compact", maximumFractionDigits: 1 })}
               </div>
               <div style={{ fontSize: "0.65rem", color: "#B8AFA0", marginTop: "0.2rem" }}>Total belanja (Rp)</div>
             </div>
@@ -224,7 +242,7 @@ export default function AdminPenggunaPage() {
         </AdminTable>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1.25rem" }}>
-          <span style={{ fontSize: "0.75rem", color: "#8A8078" }}>Menampilkan {filtered.length} dari {USERS.length} pengguna</span>
+          <span style={{ fontSize: "0.75rem", color: "#8A8078" }}>Menampilkan {filtered.length} dari {users.length} pengguna</span>
           <div style={{ display: "flex", gap: "0.35rem" }}>
             {[1, 2].map((p) => (
               <button key={p} style={{ width: "32px", height: "32px", background: p === 1 ? "#1A1714" : "transparent", border: "1px solid #E4DDD3", color: p === 1 ? "#FAF8F5" : "#6B6560", fontSize: "0.78rem", cursor: "pointer", fontFamily: "var(--font-body)" }}>{p}</button>

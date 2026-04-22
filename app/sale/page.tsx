@@ -3,13 +3,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../components/NavbarUser";
-import { fetchProducts } from "../../services/api";
-
-function getStoredUser() {
-  if (typeof window === 'undefined') return { name: "Guest", email: "", tier: "Bronze", points: 0 };
-  const saved = localStorage.getItem('user');
-  return saved ? JSON.parse(saved) : { name: "Guest", email: "", tier: "Bronze", points: 0 };
-}
+import { fetchProducts, getImageUrl, getStoredUser } from "../../services/api";
 
 // Sale ends: 3 days from now
 const SALE_END = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
@@ -240,7 +234,7 @@ export default function SalePage() {
                   boxShadow: hovered === item.id * 10 ? "0 12px 32px rgba(0,0,0,0.3)" : "none",
                 }}>
                   <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden" }}>
-                    <Image src={item.img} alt={item.name} fill style={{ objectFit: "cover", opacity: 0.85 }} />
+                    <Image src={getImageUrl(item.imageUrl || item.img)} alt={item.name} fill style={{ objectFit: "cover", opacity: 0.85 }} />
                     {/* Discount badge */}
                     <div style={{
                       position: "absolute", top: "0.75rem", left: "0.75rem",
@@ -329,7 +323,7 @@ export default function SalePage() {
                   boxShadow: hovered === item.id ? "0 12px 36px rgba(42,38,32,0.12)" : "none",
                 }}>
                   <div style={{ position: "relative", aspectRatio: "4/3", overflow: "hidden", background: "var(--bone)" }}>
-                    <Image src={item.img} alt={item.name} fill style={{ objectFit: "cover" }} />
+                    <Image src={getImageUrl(item.imageUrl || item.img)} alt={item.name} fill style={{ objectFit: "cover" }} />
                     <div style={{
                       position: "absolute", top: "0.75rem", left: "0.75rem",
                       background: "var(--copper)", color: "var(--white)",

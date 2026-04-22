@@ -4,8 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams, notFound } from "next/navigation";
 import NavbarUser from "../../components/NavbarUser";
-
-const USER = { name: "Budi Santoso", email: "budi@email.com", tier: "Gold Member", points: 2450 };
+import { getStoredUser, getImageUrl } from "../../../services/api";
 
 /* ─────────── Room Data ─────────── */
 const ROOM_DATA: Record<string, {
@@ -13,7 +12,7 @@ const ROOM_DATA: Record<string, {
   heroImg: string; count: number;
   tips: { title: string; body: string }[];
   styles: { label: string; desc: string }[];
-  products: { id: number; name: string; price: number; img: string; rating: number; cat: string; isNew?: boolean; isBest?: boolean }[];
+  products: { id: number; name: string; price: number; img: string; imageUrl?: string; rating: number; cat: string; isNew?: boolean; isBest?: boolean }[];
   relatedRooms: string[];
 }> = {
   "ruang-tamu": {
@@ -191,6 +190,7 @@ function Stars({ n }: { n: number }) {
 
 /* ─────────── Page ─────────── */
 export default function RuanganDetailPage() {
+  const user = getStoredUser();
   const { id } = useParams() as { id: string };
   const room = ROOM_DATA[id];
   if (!room) { notFound(); return null; }
@@ -201,7 +201,7 @@ export default function RuanganDetailPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bone)" }}>
-      <NavbarUser user={USER} />
+      <NavbarUser user={user} />
 
       {/* ── Cinematic Hero ── */}
       <section style={{ position: "relative", height: "520px", overflow: "hidden", background: "var(--charcoal)" }}>
@@ -324,7 +324,7 @@ export default function RuanganDetailPage() {
                   transform: hoverProd === p.id ? "translateY(-4px)" : "none",
                 }}>
                   <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden", background: "var(--bone)" }}>
-                    <Image src={p.img} alt={p.name} fill style={{ objectFit: "cover", transition: "transform 0.5s ease", transform: hoverProd === p.id ? "scale(1.05)" : "scale(1)" }} />
+                    <Image src={getImageUrl(p.imageUrl || p.img)} alt={p.name} fill style={{ objectFit: "cover", transition: "transform 0.5s ease", transform: hoverProd === p.id ? "scale(1.05)" : "scale(1)" }} />
                     {/* Badges */}
                     {p.isNew && (
                       <div style={{ position: "absolute", top: "0.75rem", left: "0.75rem", background: "var(--charcoal)", color: "var(--cream)", fontSize: "0.58rem", fontWeight: 700, letterSpacing: "0.14em", padding: "0.25rem 0.6rem" }}>NEW</div>
@@ -433,9 +433,8 @@ export default function RuanganDetailPage() {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.25rem" }} className="related-grid">
             {room.relatedRooms.map(rid => {
-              const r = ALL_ROOMS[rid];
-              if (!r) return null;
               const rData = ROOM_DATA[rid];
+              if (!rData) return null;
               return (
                 <Link key={rid} href={`/ruangan/${rid}`}
                   style={{ display: "block", textDecoration: "none" }}
@@ -446,11 +445,11 @@ export default function RuanganDetailPage() {
                     transition: "box-shadow 0.3s ease",
                     boxShadow: hoverRoom === rid ? "0 12px 40px rgba(42,38,32,0.18)" : "none",
                   }}>
-                    <Image src={r.img} alt={r.name} fill style={{ objectFit: "cover", opacity: 0.75, transition: "transform 0.5s ease, opacity 0.3s ease", transform: hoverRoom === rid ? "scale(1.05)" : "scale(1)" }} />
+                    <Image src={getImageUrl(rData.heroImg)} alt={rData.name} fill style={{ objectFit: "cover", opacity: 0.75, transition: "transform 0.5s ease, opacity 0.3s ease", transform: hoverRoom === rid ? "scale(1.05)" : "scale(1)" }} />
                     <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(26,23,20,0.8) 0%, transparent 60%)" }} />
                     <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "1.25rem" }}>
                       <p style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem", fontWeight: 300, color: "var(--cream)", marginBottom: "0.25rem" }}>
-                        {r.name}
+                        {rData.name}
                       </p>
                       <p style={{ fontSize: "0.7rem", color: "rgba(245,240,232,0.5)", letterSpacing: "0.08em" }}>
                         {rData?.count}+ produk

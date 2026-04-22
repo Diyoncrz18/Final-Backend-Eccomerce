@@ -3,8 +3,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../components/NavbarUser";
-
-const USER = { name: "Budi Santoso", email: "budi@email.com", tier: "Gold Member", points: 2450 };
+import { getStoredUser } from "../../services/api";
 
 const VALUES = [
   {
@@ -52,11 +51,12 @@ const PRESS = [
 ];
 
 export default function TentangPage() {
+  const user = getStoredUser();
   const [activeValue, setActiveValue] = useState<number | null>(null);
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bone)" }}>
-      <NavbarUser user={USER} />
+      <NavbarUser user={user} />
 
       {/* ── Hero ── */}
       <section

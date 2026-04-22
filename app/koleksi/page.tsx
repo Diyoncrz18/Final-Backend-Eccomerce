@@ -3,9 +3,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../components/NavbarUser";
-import { fetchProducts } from "../../services/api";
-
-const USER = { name: "Budi Santoso", email: "budi@email.com", tier: "Gold Member", points: 2450 };
+import { fetchProducts, getStoredUser, getImageUrl } from "../../services/api";
 
 const CATEGORIES = [
   { id: "semua", label: "Semua Produk" },
@@ -32,6 +30,7 @@ function Stars({ n }: { n: number }) {
 }
 
 export default function KoleksiPage() {
+  const user = getStoredUser();
   const [activeCategory, setActiveCategory] = useState("semua");
   const [activeSort, setActiveSort] = useState("Terbaru");
   const [sortOpen, setSortOpen] = useState(false);
@@ -66,9 +65,8 @@ export default function KoleksiPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bone)" }}>
-      <NavbarUser user={USER} />
+      <NavbarUser user={user} />
 
-      {/* ── Hero ── */}
       <section
         style={{
           position: "relative",
@@ -88,7 +86,6 @@ export default function KoleksiPage() {
           }}
         />
         <div className="container-main" style={{ position: "relative", paddingBottom: "3rem" }}>
-          {/* Breadcrumb */}
           <p style={{ fontSize: "0.7rem", color: "rgba(245,240,232,0.45)", letterSpacing: "0.12em", marginBottom: "0.75rem" }}>
             <Link href="/dashboard" style={{ color: "inherit" }}>Beranda</Link>
             {" / "}
@@ -111,7 +108,6 @@ export default function KoleksiPage() {
         </div>
       </section>
 
-      {/* ── Filter Bar ── */}
       <div style={{ background: "var(--white)", borderBottom: "1px solid var(--stone-light)", position: "sticky", top: "72px", zIndex: 40 }}>
         <div className="container-main">
           <div style={{ display: "flex", alignItems: "center", gap: 0, overflowX: "auto" }}>
@@ -142,21 +138,12 @@ export default function KoleksiPage() {
         </div>
       </div>
 
-      <div className="container-main" style={{ paddingTop: "2.5rem", paddingBottom: "5rem" }}>
-        {/* Sort + Count bar */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: "2rem",
-          }}
-        >
+      <div className="container-main" style={{ padding: "2rem 1.5rem 4rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2rem" }}>
           <p style={{ fontSize: "0.82rem", color: "var(--stone)" }}>
             Menampilkan <strong style={{ color: "var(--charcoal)" }}>{filtered.length}</strong> produk
           </p>
 
-          {/* Sort dropdown */}
           <div style={{ position: "relative" }}>
             <button
               onClick={() => setSortOpen(!sortOpen)}
@@ -171,7 +158,6 @@ export default function KoleksiPage() {
                 fontSize: "0.78rem",
                 color: "var(--charcoal)",
                 cursor: "pointer",
-                transition: "border-color 0.2s ease",
               }}
             >
               Urutkan: {activeSort}
@@ -191,7 +177,6 @@ export default function KoleksiPage() {
                   boxShadow: "0 8px 24px rgba(42,38,32,0.1)",
                   zIndex: 50,
                   minWidth: "220px",
-                  animation: "fadeUp 0.2s ease both",
                 }}
               >
                 {SORTS.map(s => (
@@ -209,11 +194,7 @@ export default function KoleksiPage() {
                       fontSize: "0.8rem",
                       color: s === activeSort ? "var(--copper)" : "var(--charcoal)",
                       cursor: "pointer",
-                      fontWeight: s === activeSort ? 500 : 400,
-                      transition: "background 0.15s ease",
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "var(--bone)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = s === activeSort ? "var(--bone)" : "none")}
                   >
                     {s}
                   </button>
@@ -223,15 +204,7 @@ export default function KoleksiPage() {
           </div>
         </div>
 
-        {/* Product Grid */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: "1.25rem",
-          }}
-          className="koleksi-grid"
-        >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1.25rem" }} className="koleksi-grid">
           {loading ? (
             <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "4rem 0" }}>
               <p>Loading products...</p>
@@ -243,7 +216,8 @@ export default function KoleksiPage() {
                 href={`/product/${item.id}`}
                 style={{ display: "block", textDecoration: "none" }}
                 onMouseEnter={() => setHovered(item.id)}
-                onMouseLeave={() => setHovered(null)}>
+                onMouseLeave={() => setHovered(null)}
+              >
                 <div style={{
                   background: "var(--white)",
                   border: "1px solid var(--stone-light)",
@@ -252,90 +226,73 @@ export default function KoleksiPage() {
                   boxShadow: hovered === item.id ? "0 12px 40px rgba(42,38,32,0.12)" : "none",
                   transform: hovered === item.id ? "translateY(-4px)" : "none",
                 }}>
-                {/* Image */}
-                <div style={{ aspectRatio: "4/3", position: "relative", background: "var(--bone)", overflow: "hidden" }}>
-                  <Image src={item.img} alt={item.name} fill style={{ objectFit: "cover", transition: "transform 0.5s ease", transform: hovered === item.id ? "scale(1.04)" : "scale(1)" }} />
-                  {(item.tag || item.new) && (
-                    <span style={{
-                      position: "absolute", top: "0.75rem", left: "0.75rem",
-                      background: item.new ? "var(--copper)" : "var(--charcoal)",
-                      color: "var(--cream)", fontSize: "0.58rem", fontWeight: 700,
-                      letterSpacing: "0.14em", textTransform: "uppercase", padding: "0.25rem 0.65rem",
-                    }}>
-                      {item.new ? "Baru" : item.tag}
-                    </span>
-                  )}
-                  {/* Wishlist */}
-                  <button
-                    onClick={e => toggleWish(item.id, e)}
-                    style={{
-                      position: "absolute", top: "0.75rem", right: "0.75rem",
-                      width: "34px", height: "34px", borderRadius: "50%",
-                      background: "rgba(250,248,245,0.95)", border: "none", cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      opacity: hovered === item.id || wishlist.includes(item.id) ? 1 : 0,
-                      transition: "opacity 0.2s ease", lineHeight: 0,
-                    }}
-                    aria-label="Wishlist"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24"
-                      fill={wishlist.includes(item.id) ? "var(--copper)" : "none"}
-                      stroke={wishlist.includes(item.id) ? "var(--copper)" : "var(--charcoal)"}
-                      strokeWidth="2">
-                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                    </svg>
-                  </button>
-                  {/* Add to cart overlay */}
-                  <div style={{
-                    position: "absolute", bottom: 0, left: 0, right: 0, padding: "1rem",
-                    background: "linear-gradient(to top, rgba(42,38,32,0.88) 0%, transparent 100%)",
-                    opacity: hovered === item.id ? 1 : 0, transition: "opacity 0.3s ease",
-                    display: "flex", justifyContent: "center",
-                  }}>
+                  <div style={{ aspectRatio: "4/3", position: "relative", background: "var(--bone)", overflow: "hidden" }}>
+                    <Image src={getImageUrl(item.imageUrl || item.img)} alt={item.name} fill style={{ objectFit: "cover", transition: "transform 0.5s ease", transform: hovered === item.id ? "scale(1.04)" : "scale(1)" }} />
+                    {(item.tag || item.new) && (
+                      <span style={{
+                        position: "absolute", top: "0.75rem", left: "0.75rem",
+                        background: item.new ? "var(--copper)" : "var(--charcoal)",
+                        color: "var(--cream)", fontSize: "0.58rem", fontWeight: 700,
+                        letterSpacing: "0.14em", textTransform: "uppercase", padding: "0.25rem 0.65rem",
+                      }}>
+                        {item.new ? "Baru" : item.tag}
+                      </span>
+                    )}
                     <button
-                      onClick={e => e.preventDefault()}
+                      onClick={e => toggleWish(item.id, e)}
                       style={{
-                        background: "var(--cream)", border: "none", color: "var(--charcoal)",
-                        padding: "0.6rem 1.5rem", fontFamily: "var(--font-body)",
-                        fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.14em",
-textTransform: "uppercase", cursor: "pointer",
+                        position: "absolute", top: "0.75rem", right: "0.75rem",
+                        width: "34px", height: "34px", borderRadius: "50%",
+                        background: "rgba(250,248,245,0.95)", border: "none", cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        opacity: hovered === item.id || wishlist.includes(item.id) ? 1 : 0,
+                        transition: "opacity 0.2s ease", lineHeight: 0,
                       }}
+                      aria-label="Wishlist"
                     >
-                      + Keranjang
+                      <svg width="14" height="14" viewBox="0 0 24 24"
+                        fill={wishlist.includes(item.id) ? "var(--copper)" : "none"}
+                        stroke={wishlist.includes(item.id) ? "var(--copper)" : "var(--charcoal)"}
+                        strokeWidth="2">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                      </svg>
                     </button>
+                    <div style={{
+                      position: "absolute", bottom: 0, left: 0, right: 0, padding: "1rem",
+                      background: "linear-gradient(to top, rgba(42,38,32,0.88) 0%, transparent 100%)",
+                      opacity: hovered === item.id ? 1 : 0, transition: "opacity 0.3s ease",
+                      display: "flex", justifyContent: "center",
+                    }}>
+                      <button
+                        onClick={e => e.preventDefault()}
+                        style={{
+                          background: "var(--cream)", border: "none", color: "var(--charcoal)",
+                          padding: "0.6rem 1.5rem", fontFamily: "var(--font-body)",
+                          fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.14em",
+                          textTransform: "uppercase", cursor: "pointer",
+                        }}
+                      >
+                        + Keranjang
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ padding: "1rem 1.1rem" }}>
+                    <p style={{ fontFamily: "var(--font-display)", fontSize: "1rem", fontWeight: 300, color: "var(--charcoal)", marginBottom: "0.3rem" }}>
+                      {item.name}
+                    </p>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.4rem" }}>
+                      <p style={{ fontSize: "0.88rem", fontWeight: 500, color: "var(--charcoal)" }}>
+                        {formatPrice(item.price)}
+                      </p>
+                      <Stars n={item.rating} />
+                    </div>
                   </div>
                 </div>
               </Link>
-            ))}
-          </div>
-                    </button>
-                  </div>
-                </div>
-                {/* Info */}
-                <div style={{ padding: "1rem 1.1rem" }}>
-                  <p style={{ fontFamily: "var(--font-display)", fontSize: "1rem", fontWeight: 300, color: "var(--charcoal)", marginBottom: "0.3rem" }}>
-                    {item.name}
-                  </p>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.4rem" }}>
-                    <p style={{ fontSize: "0.88rem", fontWeight: 500, color: "var(--charcoal)" }}>
-                      {formatPrice(item.price)}
-                    </p>
-<Stars n={item.rating} />
-                  </div>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-              </div>
-              </div>
-</Link>
-          ))))
-          ))}
-          ))}
+            ))
+          )}
         </div>
 
-        {/* Load More */}
         <div style={{ textAlign: "center", marginTop: "3rem" }}>
           <button style={{
             background: "transparent", border: "1px solid var(--charcoal)",
@@ -343,14 +300,6 @@ textTransform: "uppercase", cursor: "pointer",
             fontFamily: "var(--font-body)", fontSize: "0.78rem", fontWeight: 500,
             letterSpacing: "0.15em", textTransform: "uppercase", cursor: "pointer",
             transition: "all 0.3s ease",
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLButtonElement).style.background = "var(--charcoal)";
-            (e.currentTarget as HTMLButtonElement).style.color = "var(--cream)";
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-            (e.currentTarget as HTMLButtonElement).style.color = "var(--charcoal)";
           }}>
             Muat Lebih Banyak
           </button>

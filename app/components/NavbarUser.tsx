@@ -350,7 +350,7 @@ export default function NavbarUser({ user }: { user: User }) {
               <span style={{ fontSize: "0.78rem", color: "var(--charcoal-soft)" }}>Poin Saya</span>
             </div>
             <span style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--copper)" }}>
-              {user.points.toLocaleString()}
+              {(user.points || 0).toLocaleString()}
             </span>
           </div>
           {/* Logout */}
