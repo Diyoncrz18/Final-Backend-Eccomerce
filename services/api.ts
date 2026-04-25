@@ -1,4 +1,5 @@
- const API_BASE_URL = 'http://localhost:8081/api/v1';
+ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8081/api/v1';
+
 
 export interface User {
   id: number;
@@ -6,8 +7,60 @@ export interface User {
   email: string;
   phone?: string;
   role: string;
-  tier?: string;
-  points?: number;
+  roles: string[];
+  tier: string;
+  points: number;
+  avatarUrl?: string;
+  gender?: string;
+  birthdate?: string;
+  joinDate?: string;
+}
+
+export interface DashboardUser extends User {
+  tier: string;
+  points: number;
+  pointsNext: number;
+  totalSpent: number;
+  joinDate?: string;
+}
+
+export interface DashboardStats {
+  totalOrders: number;
+  activeOrders: number;
+  wishlistCount: number;
+  rewardPoints: number;
+}
+
+export interface DashboardOrder {
+  id: number;
+  orderNumber: string;
+  productName: string;
+  productImage?: string | null;
+  status: string;
+  statusCode: string;
+  total: number;
+  createdAt: string;
+  eta?: string | null;
+}
+
+export interface DashboardProduct {
+  id: number;
+  name: string;
+  price: number;
+  salePrice?: number | null;
+  imageUrl?: string | null;
+  tag?: string | null;
+  rating: number;
+  category?: string | null;
+  inWishlist: boolean;
+}
+
+export interface DashboardData {
+  user: DashboardUser;
+  stats: DashboardStats;
+  recentOrders: DashboardOrder[];
+  wishlist: DashboardProduct[];
+  recommendations: DashboardProduct[];
 }
 
 export interface LoginRequest {
@@ -34,20 +87,89 @@ export interface AuthResponse {
 export interface ResponseData {
   status: boolean;
   message?: string | string[];
-  payload?: any;
+  payload?: {
+    accessToken?: string;
+    [key: string]: unknown;
+  };
 }
 
-async function handleResponse<T>(response: Response): Promise<T> {
-  const data: ResponseData = await response.json();
-  
-  if (!response.ok) {
-    const message = Array.isArray(data.message) 
-      ? data.message[0] 
-      : data.message || 'Operation failed';
-    throw new Error(message);
+const DEFAULT_USER: User = {
+  id: 0,
+  name: 'Guest',
+  email: '',
+  phone: '',
+  role: 'ROLE_USER',
+  roles: ['ROLE_USER'],
+  tier: 'REGULAR',
+  points: 0,
+};
+
+function getErrorMessage(message?: string | string[], fallback = 'Operation failed'): string {
+  if (Array.isArray(message)) {
+    return message[0] || fallback;
   }
-  
-  return data as T;
+  return message || fallback;
+}
+
+function normalizeUser(data: unknown): User {
+  const source = typeof data === 'object' && data !== null ? data as Record<string, unknown> : {};
+  const roles = Array.isArray(source.roles)
+    ? source.roles.filter((role): role is string => typeof role === 'string' && role.length > 0)
+    : typeof source.role === 'string' && source.role.length > 0
+      ? [source.role]
+      : ['ROLE_USER'];
+
+  return {
+    id: Number(source.id) || 0,
+    name: typeof source.name === 'string'
+      ? source.name
+      : typeof source.fullName === 'string'
+        ? source.fullName
+        : DEFAULT_USER.name,
+    email: typeof source.email === 'string' ? source.email : DEFAULT_USER.email,
+    phone: typeof source.phone === 'string' ? source.phone : '',
+    role: roles[0] || 'ROLE_USER',
+    roles,
+    tier: typeof source.tier === 'string' ? source.tier : DEFAULT_USER.tier,
+    points: Number(source.points ?? source.rewardPoints ?? 0),
+    avatarUrl: typeof source.avatarUrl === 'string' ? source.avatarUrl : '',
+    gender: typeof source.gender === 'string' ? source.gender : '',
+    birthdate: typeof source.birthdate === 'string' ? source.birthdate : '',
+    joinDate: typeof source.joinDate === 'string' ? source.joinDate : '',
+  };
+}
+
+function readStoredUser(): User | null {
+  if (typeof window === 'undefined') return null;
+
+  const saved = localStorage.getItem('user');
+  if (!saved) return null;
+
+  try {
+    return normalizeUser(JSON.parse(saved));
+  } catch {
+    return null;
+  }
+}
+
+function setStoredUser(user: User): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('user', JSON.stringify(user));
+}
+
+async function fetchUserProfile(token: string): Promise<User> {
+  const response = await fetch(`${API_BASE_URL}/users/me`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error('Gagal mengambil profil pengguna');
+  }
+
+  return normalizeUser(await response.json());
 }
 
 export async function login(credentials: LoginRequest): Promise<AuthResponse> {
@@ -63,40 +185,24 @@ export async function login(credentials: LoginRequest): Promise<AuthResponse> {
 
     const data: ResponseData = await response.json();
 
-    if (!data.status) {
+    if (!response.ok || !data.status) {
       return {
         success: false,
-        message: Array.isArray(data.message) ? data.message[0] : (data.message || 'Email atau password salah'),
+        message: getErrorMessage(data.message, 'Email atau password salah'),
       };
     }
 
     const token = data.payload?.accessToken;
-    
-    // Get user info from the stored user data or by parsing email from token
-    let user: User = { id: 0, name: '', email: credentials.email, role: 'ROLE_USER' };
-    
-    // Try to get user fromme endpoint
-    try {
-      const userResponse = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        credentials: 'include',
-      });
-      if (userResponse.ok) {
-        const userData = await userResponse.json();
-        user = {
-          id: userData.id || 0,
-          name: userData.name || credentials.email.split('@')[0],
-          email: userData.email || credentials.email,
-          role: userData.roles?.[0] || 'ROLE_USER',
-          tier: userData.tier || 'Bronze',
-          points: userData.points || 0,
-        };
-      }
-    } catch (e) {
-      // Use default user
+    if (!token) {
+      return {
+        success: false,
+        message: 'Token login tidak tersedia',
+      };
     }
+
+    const user = await fetchUserProfile(token);
+    setAuthToken(token);
+    setStoredUser(user);
 
     return {
       success: true,
@@ -105,11 +211,12 @@ export async function login(credentials: LoginRequest): Promise<AuthResponse> {
         user,
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    clearAuthStorage();
     console.error('Login error:', error);
     return {
       success: false,
-      message: error.message || 'Unable to connect to server. Please try again.',
+      message: error instanceof Error ? error.message : 'Unable to connect to server. Please try again.',
     };
   }
 }
@@ -135,19 +242,19 @@ export async function register(userData: RegisterRequest): Promise<AuthResponse>
     if (!data.status) {
       return {
         success: false,
-        message: Array.isArray(data.message) ? data.message[0] : (data.message || 'Registration failed'),
+        message: getErrorMessage(data.message, 'Registration failed'),
       };
     }
 
     return {
       success: true,
-      message: Array.isArray(data.message) ? data.message[0] : 'Registration successful',
+      message: getErrorMessage(data.message, 'Registration successful'),
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Register error:', error);
     return {
       success: false,
-      message: error.message || 'Unable to connect to server. Please try again.',
+      message: error instanceof Error ? error.message : 'Unable to connect to server. Please try again.',
     };
   }
 }
@@ -157,26 +264,58 @@ export async function getCurrentUser(): Promise<User | null> {
   if (!token) return null;
 
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    const user = await fetchUserProfile(token);
+    setStoredUser(user);
+    return user;
+  } catch {
+    clearAuthStorage();
+    return null;
+  }
+}
+
+export async function fetchDashboard(): Promise<DashboardData | null> {
+  const token = getAuthToken();
+  if (!token) return null;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/dashboard/me`, {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
       credentials: 'include',
     });
-    
-    if (!response.ok) return null;
-    
+
+    if (!response.ok) {
+      throw new Error('Gagal mengambil data dashboard');
+    }
+
     const data = await response.json();
-    return {
-      id: data.id || 0,
-      name: data.name || '',
-      email: data.email || '',
-      phone: data.phone,
-      role: data.roles?.[0] || 'ROLE_USER',
-      tier: data.tier || 'Bronze',
-      points: data.points || 0,
+    const user = normalizeUser(data.user);
+    const dashboardUser: DashboardUser = {
+      ...user,
+      tier: user.tier || 'REGULAR',
+      points: user.points || 0,
+      pointsNext: Number(data.user?.pointsNext ?? 1000),
+      totalSpent: Number(data.user?.totalSpent ?? 0),
+      joinDate: typeof data.user?.joinDate === 'string' ? data.user.joinDate : undefined,
     };
-  } catch {
+
+    setStoredUser(user);
+
+    return {
+      user: dashboardUser,
+      stats: {
+        totalOrders: Number(data.stats?.totalOrders ?? 0),
+        activeOrders: Number(data.stats?.activeOrders ?? 0),
+        wishlistCount: Number(data.stats?.wishlistCount ?? 0),
+        rewardPoints: Number(data.stats?.rewardPoints ?? dashboardUser.points ?? 0),
+      },
+      recentOrders: Array.isArray(data.recentOrders) ? data.recentOrders : [],
+      wishlist: Array.isArray(data.wishlist) ? data.wishlist : [],
+      recommendations: Array.isArray(data.recommendations) ? data.recommendations : [],
+    };
+  } catch (error) {
+    console.error('Error fetching dashboard:', error);
     return null;
   }
 }
@@ -239,13 +378,51 @@ export function getAuthToken(): string | null {
   return localStorage.getItem('authToken');
 }
 
+function getAuthHeaders(includeJson = false): HeadersInit | null {
+  const token = getAuthToken();
+  if (!token) return null;
+
+  return includeJson
+    ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+    : { 'Authorization': `Bearer ${token}` };
+}
+
 export function setAuthToken(token: string): void {
+  if (typeof window === 'undefined') return;
   localStorage.setItem('authToken', token);
 }
 
-export function removeAuthToken(): void {
+export function clearAuthStorage(): void {
+  if (typeof window === 'undefined') return;
   localStorage.removeItem('authToken');
   localStorage.removeItem('user');
+  localStorage.removeItem('token');
+  localStorage.removeItem('maison_admin_auth');
+  localStorage.removeItem('maison_admin_name');
+}
+
+export function removeAuthToken(): void {
+  clearAuthStorage();
+}
+
+export async function logout(): Promise<void> {
+  const token = getAuthToken();
+
+  try {
+    if (token) {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        credentials: 'include',
+      });
+    }
+  } catch (error) {
+    console.error('Logout error:', error);
+  } finally {
+    clearAuthStorage();
+  }
 }
 
 // Helper functions for safe data handling
@@ -274,29 +451,44 @@ export interface CartItem {
   price: number;
   quantity: number;
   stock: number;
+  subtotal?: number;
+}
+
+export interface CartResponse {
+  items: CartItem[];
+  subtotal: number;
+  count: number;
+  isGuest: boolean;
 }
 
 export interface OrderItem {
   productId: number;
   quantity: number;
-  price: number;
 }
 
 export interface CreateOrderRequest {
-  items: OrderItem[];
+  orderItems: OrderItem[];
   shippingAddress: string;
-  paymentMethod: string;
-  notes?: string;
+  billingAddress?: string;
+  customerNote?: string;
+  tax?: number;
+  shippingFee?: number;
+  discount?: number;
 }
 
 export interface Order {
   id: number;
   orderNumber: string;
   status: string;
-  items: CartItem[];
+  items?: CartItem[];
+  orderItems?: unknown[];
   subtotal: number;
-  shipping: number;
+  shipping?: number;
+  shippingFee?: number;
+  discount?: number;
   total: number;
+  shippingAddress?: string;
+  customerNote?: string;
   createdAt: string;
 }
 
@@ -316,6 +508,146 @@ export async function getMyOrders(page = 0, size = 20): Promise<Order[]> {
     return data.content || [];
   } catch {
     return [];
+  }
+}
+
+export async function getCart(): Promise<CartResponse> {
+  const token = getAuthToken();
+  if (!token) return { items: [], subtotal: 0, count: 0, isGuest: true };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/cart`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+      credentials: 'include',
+    });
+    if (!response.ok) return { items: [], subtotal: 0, count: 0, isGuest: false };
+    const data = await response.json();
+    return {
+      items: Array.isArray(data.items) ? data.items : [],
+      subtotal: Number(data.subtotal ?? 0),
+      count: Number(data.count ?? 0),
+      isGuest: Boolean(data.isGuest),
+    };
+  } catch {
+    return { items: [], subtotal: 0, count: 0, isGuest: false };
+  }
+}
+
+export interface CartMutationResponse {
+  success: boolean;
+  message?: string;
+  item?: CartItem;
+}
+
+function normalizeCartItem(item: unknown): CartItem | undefined {
+  if (!item || typeof item !== 'object') return undefined;
+  const source = item as Record<string, unknown>;
+  return {
+    id: Number(source.id ?? 0),
+    productId: Number(source.productId ?? 0),
+    productName: String(source.productName ?? 'Produk'),
+    productImage: String(source.productImage ?? ''),
+    variant: String(source.variant ?? 'Default'),
+    price: Number(source.price ?? 0),
+    quantity: Number(source.quantity ?? 1),
+    stock: Number(source.stock ?? 0),
+    subtotal: Number(source.subtotal ?? 0),
+  };
+}
+
+async function parseCartMutationResponse(response: Response): Promise<CartMutationResponse> {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      success: false,
+      message: typeof data.message === 'string' ? data.message : 'Cart operation failed',
+    };
+  }
+
+  return {
+    success: Boolean(data.success ?? true),
+    message: typeof data.message === 'string' ? data.message : undefined,
+    item: normalizeCartItem(data.item),
+  };
+}
+
+export async function addCartItem(
+  productId: number,
+  quantity = 1,
+  variant = 'Default'
+): Promise<CartMutationResponse> {
+  const token = getAuthToken();
+  if (!token) return { success: false, message: 'Please login first' };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/cart`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ productId, quantity, variant }),
+      credentials: 'include',
+    });
+
+    return await parseCartMutationResponse(response);
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Connection error' };
+  }
+}
+
+export async function updateCartItemQuantity(itemId: number, quantity: number): Promise<CartMutationResponse> {
+  const token = getAuthToken();
+  if (!token) return { success: false, message: 'Please login first' };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/cart/${itemId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ quantity }),
+      credentials: 'include',
+    });
+
+    return await parseCartMutationResponse(response);
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Connection error' };
+  }
+}
+
+export async function removeCartItem(itemId: number): Promise<CartMutationResponse> {
+  const token = getAuthToken();
+  if (!token) return { success: false, message: 'Please login first' };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/cart/${itemId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+      credentials: 'include',
+    });
+
+    return await parseCartMutationResponse(response);
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Connection error' };
+  }
+}
+
+export async function clearServerCart(): Promise<CartMutationResponse> {
+  const token = getAuthToken();
+  if (!token) return { success: false, message: 'Please login first' };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/cart`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+      credentials: 'include',
+    });
+
+    return await parseCartMutationResponse(response);
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Connection error' };
   }
 }
 
@@ -343,8 +675,8 @@ export async function createOrder(request: CreateOrderRequest): Promise<{ succes
     }
 
     return { success: true, order: data };
-  } catch (error: any) {
-    return { success: false, message: error.message || 'Connection error' };
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Connection error' };
   }
 }
 
@@ -363,6 +695,44 @@ export async function getOrderById(id: number): Promise<Order | null> {
     return await response.json();
   } catch {
     return null;
+  }
+}
+
+export async function getOrderByNumber(orderNumber: string): Promise<Order | null> {
+  const token = getAuthToken();
+  if (!token) return null;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/orders/number/${encodeURIComponent(orderNumber)}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      credentials: 'include',
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function cancelOrder(id: number): Promise<{ success: boolean; message?: string }> {
+  const token = getAuthToken();
+  if (!token) return { success: false, message: 'Please login first' };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/orders/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      return { success: false, message: data.message || 'Gagal membatalkan pesanan' };
+    }
+    return { success: true };
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Connection error' };
   }
 }
 
@@ -415,8 +785,12 @@ export interface WishlistItem {
   id: number;
   name: string;
   price: number;
+  salePrice?: number | null;
   imageUrl: string;
   category?: string;
+  rating?: number;
+  stock?: number;
+  isNew?: boolean;
 }
 
 export async function getWishlist(): Promise<WishlistItem[]> {
@@ -450,8 +824,8 @@ export async function addToWishlist(productId: number): Promise<{ success: boole
       credentials: 'include',
     });
     return await response.json();
-  } catch (error: any) {
-    return { success: false, message: error.message };
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Operation failed' };
   }
 }
 
@@ -466,8 +840,8 @@ export async function removeFromWishlist(productId: number): Promise<{ success: 
       credentials: 'include',
     });
     return await response.json();
-  } catch (error: any) {
-    return { success: false, message: error.message };
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Operation failed' };
   }
 }
 
@@ -495,9 +869,14 @@ export interface Voucher {
   code: string;
   discountType: 'PERCENT' | 'FIXED';
   discountValue: number;
+  pointsCost: number;
   minOrderValue: number;
   validUntil: string;
   isActive: boolean;
+  usedCount: number;
+  usageLimit: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export async function getVouchers(): Promise<Voucher[]> {
@@ -505,9 +884,123 @@ export async function getVouchers(): Promise<Voucher[]> {
     const response = await fetch(`${API_BASE_URL}/vouchers`);
     if (!response.ok) return [];
     const data = await response.json();
-    return data.vouchers || [];
+    return Array.isArray(data.vouchers) ? data.vouchers.map(normalizeVoucher) : [];
   } catch {
     return [];
+  }
+}
+
+function normalizeVoucher(source: unknown): Voucher {
+  const voucher = typeof source === 'object' && source !== null ? source as Record<string, unknown> : {};
+  const discountType = String(voucher.discountType ?? voucher.type ?? 'FIXED').toUpperCase();
+  return {
+    id: Number(voucher.id ?? 0),
+    code: String(voucher.code ?? ''),
+    discountType: discountType === 'PERCENT' || discountType === 'PERSEN' ? 'PERCENT' : 'FIXED',
+    discountValue: Number(voucher.discountValue ?? voucher.value ?? 0),
+    pointsCost: Number(voucher.pointsCost ?? 0),
+    minOrderValue: Number(voucher.minOrderValue ?? voucher.minOrder ?? 0),
+    validUntil: String(voucher.validUntil ?? voucher.expiry ?? ''),
+    isActive: voucher.isActive !== false,
+    usedCount: Number(voucher.usedCount ?? voucher.used ?? 0),
+    usageLimit: Number(voucher.usageLimit ?? voucher.limit ?? 0),
+    createdAt: typeof voucher.createdAt === 'string' ? voucher.createdAt : undefined,
+    updatedAt: typeof voucher.updatedAt === 'string' ? voucher.updatedAt : undefined,
+  };
+}
+
+export interface AdminVoucherPayload {
+  code: string;
+  discountType: 'PERCENT' | 'FIXED';
+  discountValue: number;
+  pointsCost: number;
+  minOrderValue: number;
+  usageLimit: number;
+  validUntil: string;
+  isActive: boolean;
+}
+
+export async function fetchAdminVouchers(): Promise<Voucher[]> {
+  const token = getAuthToken();
+  if (!token) return [];
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/admin/vouchers`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+      credentials: 'include',
+    });
+    if (!response.ok) throw new Error('Failed to fetch admin vouchers');
+    const data = await response.json();
+    return Array.isArray(data.vouchers) ? data.vouchers.map(normalizeVoucher) : [];
+  } catch (error) {
+    console.error('Error fetching admin vouchers:', error);
+    return [];
+  }
+}
+
+export async function createAdminVoucher(payload: AdminVoucherPayload): Promise<{ success: boolean; message?: string; voucher?: Voucher }> {
+  const token = getAuthToken();
+  if (!token) return { success: false, message: 'Please login first' };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/admin/vouchers`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      credentials: 'include',
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return { success: false, message: data.message || 'Failed to create voucher' };
+    return { success: true, voucher: normalizeVoucher(data.voucher) };
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Connection error' };
+  }
+}
+
+export async function updateAdminVoucher(id: number, payload: Partial<AdminVoucherPayload>): Promise<{ success: boolean; message?: string; voucher?: Voucher }> {
+  const token = getAuthToken();
+  if (!token) return { success: false, message: 'Please login first' };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/admin/vouchers/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      credentials: 'include',
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return { success: false, message: data.message || 'Failed to update voucher' };
+    return { success: true, voucher: normalizeVoucher(data.voucher) };
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Connection error' };
+  }
+}
+
+export async function setAdminVoucherActive(id: number, isActive: boolean): Promise<{ success: boolean; message?: string; voucher?: Voucher }> {
+  const token = getAuthToken();
+  if (!token) return { success: false, message: 'Please login first' };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/admin/vouchers/${id}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ isActive }),
+      credentials: 'include',
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return { success: false, message: data.message || 'Failed to update voucher status' };
+    return { success: true, voucher: normalizeVoucher(data.voucher) };
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Connection error' };
   }
 }
 
@@ -524,8 +1017,8 @@ export async function validateVoucher(code: string, orderValue: number): Promise
       body: JSON.stringify({ code, orderValue }),
     });
     return await response.json();
-  } catch (error: any) {
-    return { valid: false, message: error.message };
+  } catch (error: unknown) {
+    return { valid: false, message: error instanceof Error ? error.message : 'Operation failed' };
   }
 }
 
@@ -543,8 +1036,8 @@ export async function redeemVoucher(code: string): Promise<{ success: boolean; m
       body: JSON.stringify({ code }),
     });
     return await response.json();
-  } catch (error: any) {
-    return { success: false, message: error.message };
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Operation failed' };
   }
 }
 
@@ -593,8 +1086,8 @@ export async function submitReview(
       body: JSON.stringify({ rating, comment }),
     });
     return await response.json();
-  } catch (error: any) {
-    return { success: false, message: error.message };
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Operation failed' };
   }
 }
 
@@ -603,6 +1096,9 @@ export async function submitReview(
 export async function updateUserProfile(data: {
   name?: string;
   phone?: string;
+  avatarUrl?: string;
+  gender?: string;
+  birthdate?: string;
 }): Promise<{ success: boolean; message?: string }> {
   const token = getAuthToken();
   if (!token) return { success: false, message: 'Please login first' };
@@ -617,70 +1113,114 @@ export async function updateUserProfile(data: {
       body: JSON.stringify(data),
     });
     return await response.json();
-  } catch (error: any) {
-    return { success: false, message: error.message };
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Operation failed' };
   }
 }
 
-export function getStoredUser(): { name: string; email: string; tier: string; points: number } {
-  if (typeof window === 'undefined') {
-    return { name: "Guest", email: "", tier: "Bronze", points: 0 };
-  }
-  const saved = localStorage.getItem('user');
-  if (saved) {
-    try {
-      const user = JSON.parse(saved);
-      return {
-        name: user.name || "Guest",
-        email: user.email || "",
-        tier: user.tier || "Bronze",
-        points: user.points || 0,
-      };
-    } catch {
-      return { name: "Guest", email: "", tier: "Bronze", points: 0 };
-    }
-  }
-  return { name: "Guest", email: "", tier: "Bronze", points: 0 };
+export function getStoredUser(): User {
+  return readStoredUser() || DEFAULT_USER;
+}
+
+export function isAuthenticated(): boolean {
+  return !!getAuthToken();
 }
 
 export function isAdmin(): boolean {
-  if (typeof window === 'undefined') return false;
-  const saved = localStorage.getItem('user');
-  if (saved) {
-    try {
-      const user = JSON.parse(saved);
-      return user.role === 'ROLE_ADMIN' || user.roles?.includes('ROLE_ADMIN');
-    } catch {
-      return false;
-    }
-  }
-  return false;
+  const user = readStoredUser();
+  if (!user) return false;
+  return user.role === 'ROLE_ADMIN' || user.roles.includes('ROLE_ADMIN');
 }
 
-export async function fetchAdminUsers(page = 0, size = 20, search?: string) {
+export function getAdminDisplayName(): string {
+  const user = readStoredUser();
+  return user?.name || 'Admin Maison';
+}
+
+export interface AdminUser {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  tier: string;
+  rewardPoints: number;
+  totalOrders: number;
+  totalSpent: number;
+  isActive: boolean;
+  joinDate?: string;
+  roles: string[];
+}
+
+function normalizeAdminUser(source: unknown): AdminUser {
+  const user = typeof source === 'object' && source !== null ? source as Record<string, unknown> : {};
+  return {
+    id: Number(user.id ?? 0),
+    name: String(user.name ?? 'Unknown'),
+    email: String(user.email ?? ''),
+    phone: String(user.phone ?? ''),
+    tier: String(user.tier ?? 'REGULAR').toUpperCase(),
+    rewardPoints: Number(user.rewardPoints ?? user.points ?? 0),
+    totalOrders: Number(user.totalOrders ?? 0),
+    totalSpent: Number(user.totalSpent ?? user.totalSpend ?? 0),
+    isActive: user.isActive !== false,
+    joinDate: typeof user.joinDate === 'string' ? user.joinDate : undefined,
+    roles: Array.isArray(user.roles) ? user.roles.filter((role): role is string => typeof role === 'string') : [],
+  };
+}
+
+export async function fetchAdminUsers(page = 0, size = 20, search?: string, tier?: string): Promise<AdminUser[]> {
+  const headers = getAuthHeaders();
+  if (!headers) return [];
+
   try {
-    const token = getAuthToken();
     const params = new URLSearchParams({ page: String(page), size: String(size) });
     if (search) params.append('search', search);
+    if (tier) params.append('tier', tier);
     const response = await fetch(`${API_BASE_URL}/admin/users?${params}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers,
+      credentials: 'include',
     });
     if (!response.ok) throw new Error('Failed to fetch users');
     const data = await response.json();
-    return data.content || [];
+    return Array.isArray(data.content) ? data.content.map(normalizeAdminUser) : [];
   } catch (error) {
     console.error('Error fetching admin users:', error);
     return [];
   }
 }
 
-export async function fetchAdminOrders(page = 0, size = 20, status?: string) {
+export async function updateAdminUser(
+  id: number,
+  payload: Partial<Pick<AdminUser, 'name' | 'phone' | 'tier' | 'rewardPoints' | 'isActive'>>
+): Promise<{ success: boolean; message?: string; user?: AdminUser }> {
+  const headers = getAuthHeaders(true);
+  if (!headers) return { success: false, message: 'Please login first' };
+
   try {
-    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/admin/users/${id}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload),
+      credentials: 'include',
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return { success: false, message: data.message || 'Failed to update user' };
+    return { success: true, user: normalizeAdminUser(data) };
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Connection error' };
+  }
+}
+
+export async function fetchAdminOrders(page = 0, size = 20, status?: string) {
+  const headers = getAuthHeaders();
+  if (!headers) return [];
+
+  try {
     const params = new URLSearchParams({ page: String(page), size: String(size) });
-    if (status) params.append('status', status);
+    if (status) params.append('status', status.toUpperCase());
     const response = await fetch(`${API_BASE_URL}/orders?${params}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers,
+      credentials: 'include',
     });
     if (!response.ok) throw new Error('Failed to fetch orders');
     const data = await response.json();
@@ -692,11 +1232,14 @@ export async function fetchAdminOrders(page = 0, size = 20, status?: string) {
 }
 
 export async function updateOrderStatus(orderId: number, status: string) {
+  const headers = getAuthHeaders();
+  if (!headers) return { success: false };
+
   try {
-    const token = getAuthToken();
-    const response = await fetch(`${API_BASE_URL}/orders/${orderId}/status?status=${status}`, {
+    const response = await fetch(`${API_BASE_URL}/orders/${orderId}/status?status=${encodeURIComponent(status.toUpperCase())}`, {
       method: 'PUT',
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers,
+      credentials: 'include',
     });
     if (!response.ok) throw new Error('Failed to update order');
     return await response.json();
@@ -740,11 +1283,33 @@ export async function updateReviewStatus(reviewId: number, status: string) {
   }
 }
 
-export async function fetchRewardsConfig() {
+export async function deleteReview(reviewId: number): Promise<{ success: boolean; message?: string }> {
+  const token = getAuthToken();
+  if (!token) return { success: false, message: 'Please login first' };
+
   try {
-    const token = getAuthToken();
-    const response = await fetch(`${API_BASE_URL}/admin/rewards`, {
+    const response = await fetch(`${API_BASE_URL}/reviews/${reviewId}`, {
+      method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      return { success: false, message: data.message || 'Failed to delete review' };
+    }
+    return await response.json();
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Operation failed' };
+  }
+}
+
+export async function fetchRewardsConfig() {
+  const headers = getAuthHeaders();
+  if (!headers) return {};
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/admin/rewards`, {
+      headers,
+      credentials: 'include',
     });
     if (!response.ok) throw new Error('Failed to fetch rewards config');
     return await response.json();
@@ -754,11 +1319,33 @@ export async function fetchRewardsConfig() {
   }
 }
 
-export async function fetchStoreSettings() {
+export async function updateRewardsConfig(config: Record<string, unknown>) {
+  const headers = getAuthHeaders(true);
+  if (!headers) return { success: false };
+
   try {
-    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/admin/rewards`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(config),
+      credentials: 'include',
+    });
+    if (!response.ok) throw new Error('Failed to update rewards config');
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating rewards config:', error);
+    return { success: false };
+  }
+}
+
+export async function fetchStoreSettings() {
+  const headers = getAuthHeaders();
+  if (!headers) return {};
+
+  try {
     const response = await fetch(`${API_BASE_URL}/admin/settings`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers,
+      credentials: 'include',
     });
     if (!response.ok) throw new Error('Failed to fetch settings');
     return await response.json();
@@ -768,16 +1355,16 @@ export async function fetchStoreSettings() {
   }
 }
 
-export async function updateStoreSettings(settings: any) {
+export async function updateStoreSettings(settings: Record<string, unknown>) {
+  const headers = getAuthHeaders(true);
+  if (!headers) return { success: false };
+
   try {
-    const token = getAuthToken();
     const response = await fetch(`${API_BASE_URL}/admin/settings`, {
       method: 'PUT',
-      headers: { 
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(settings),
+      credentials: 'include',
     });
     if (!response.ok) throw new Error('Failed to update settings');
     return await response.json();
@@ -786,3 +1373,72 @@ export async function updateStoreSettings(settings: any) {
     return { success: false };
   }
 }
+
+// ─── RAG Chatbot ──────────────────────────────────────────────────────────────
+
+export interface ChatMessageDTO {
+  role: 'user' | 'ai';
+  text: string;
+}
+
+export interface ChatProduct {
+  id: number;
+  name: string;
+  description?: string;
+  price: number;
+  salePrice?: number | null;
+  imageUrl?: string | null;
+  material?: string | null;
+  stock?: number;
+  isNew?: boolean;
+  rating?: number;
+  category?: { id: number; name: string } | null;
+  collection?: { id: number; name: string } | null;
+}
+
+export interface ChatApiResponse {
+  text: string;
+  productIds: number[];
+  products: ChatProduct[];
+  intent?: string;
+  usage?: {
+    promptTokens?: number;
+    responseTokens?: number;
+    totalTokens?: number;
+  };
+  success: boolean;
+}
+
+/**
+ * Send a chat message to the RAG backend.
+ * Falls back to a safe local response when the backend is unreachable.
+ */
+export async function sendChatMessage(
+  message: string,
+  history: ChatMessageDTO[] = []
+): Promise<ChatApiResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/chat/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, history }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Chat API returned ${response.status}`);
+    }
+    return (await response.json()) as ChatApiResponse;
+  } catch (error) {
+    console.error('Error sending chat message:', error);
+    return {
+      text:
+        'Maaf, asisten saya sedang sibuk. Coba beberapa saat lagi, atau jelajahi koleksi kami di halaman Koleksi.',
+      productIds: [],
+      products: [],
+      intent: 'fallback',
+      success: false,
+    };
+  }
+}
+
+
