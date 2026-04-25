@@ -20,15 +20,13 @@ function LoginContent({ navigate }: { navigate: (href: string) => void }) {
 
     try {
       const result = await login({ email, password });
-      
-      if (result.success && result.data?.token) {
-        localStorage.setItem('authToken', result.data.token);
-        localStorage.setItem('user', JSON.stringify(result.data.user));
+
+      if (result.success && result.data?.user) {
         navigate("/dashboard");
       } else {
         setError(result.message || 'Email atau password salah');
       }
-    } catch (err) {
+    } catch {
       setError('Terjadi kesalahan. Silakan coba lagi.');
     } finally {
       setLoading(false);
@@ -110,7 +108,7 @@ function LoginContent({ navigate }: { navigate: (href: string) => void }) {
                 fontStyle: "italic",
               }}
             >
-              "Rumah adalah cermin<br />jiwa Anda."
+              &ldquo;Rumah adalah cermin<br />jiwa Anda.&rdquo;
             </p>
             <p
               style={{

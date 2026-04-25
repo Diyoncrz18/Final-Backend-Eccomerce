@@ -1,7 +1,10 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { isAdmin, isAuthenticated, login, logout } from "../../../services/api";
+
+const isBrowser = typeof window !== "undefined";
 
 /* ─── Decorative SVG Pattern ─── */
 function GridPattern() {
@@ -53,15 +56,12 @@ export default function AdminLoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-    // Redirect if already logged in
-    if (typeof window !== "undefined" && localStorage.getItem("maison_admin_auth") === "true") {
-      router.replace("/admin");
-    }
-  }, [router]);
+  const mounted = isBrowser;
+  if (mounted && isAuthenticated() && isAdmin()) {
+    router.replace("/admin");
+    return null;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,55 +75,29 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8081/api/v1/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      const result = await login({ email, password });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.status) {
-        setError(data.message || "Email atau password salah.");
+      if (!result.success || !result.data?.user) {
+        setError(result.message || "Email atau password salah.");
         setLoading(false);
         return;
       }
 
-      const token = data.payload?.accessToken;
-      const user = data.payload?.user;
-
-      if (!user || !token) {
-        setError("Login gagal. Silakan coba lagi.");
-        setLoading(false);
-        return;
-      }
-
-      const roles = user.roles || [];
-      const isAdmin = roles.includes("ROLE_ADMIN");
-
-      if (!isAdmin) {
+      if (!isAdmin()) {
+        await logout();
         setError("Anda tidak memiliki akses admin.");
         setLoading(false);
         return;
       }
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: roles[0],
-        roles: roles,
-        tier: user.tier || "REGULAR",
-        points: user.points || 0,
-      }));
-      localStorage.setItem("maison_admin_auth", "true");
-
       router.replace("/admin");
-    } catch (err) {
+    } catch {
       setError("Terjadi kesalahan. Silakan coba lagi.");
       setLoading(false);
+      return;
     }
+
+    setLoading(false);
   };
 
   if (!mounted) return null;
@@ -356,7 +330,7 @@ export default function AdminLoginPage() {
                 Demo Credentials
               </div>
               <div style={{ fontSize: "0.7rem", color: "#8A8078", lineHeight: 1.6 }}>
-                Email: <span style={{ color: "#1A1714", fontWeight: 500 }}>admin@maison.id</span>
+                Email: <span style={{ color: "#1A1714", fontWeight: 500 }}>admin@maison.com</span>
                 <br />
                 Password: <span style={{ color: "#1A1714", fontWeight: 500 }}>admin123</span>
               </div>
@@ -391,7 +365,7 @@ export default function AdminLoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@maison.id"
+                placeholder="admin@maison.com"
                 autoComplete="email"
                 style={{
                   width: "100%",
