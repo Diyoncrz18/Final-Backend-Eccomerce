@@ -320,9 +320,13 @@ export async function fetchDashboard(): Promise<DashboardData | null> {
   }
 }
 
-export async function fetchProducts(page = 0, size = 20) {
+export async function fetchProducts(page = 0, size = 20, categoryId?: number) {
   try {
-    const response = await fetch(`${API_BASE_URL}/products?page=${page}&size=${size}`);
+    let url = `${API_BASE_URL}/products?page=${page}&size=${size}`;
+    if (categoryId) {
+      url += `&categoryId=${categoryId}`;
+    }
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error('Failed to fetch products');
     }
