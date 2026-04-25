@@ -1,9 +1,21 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import NavbarUser from "../components/NavbarUser";
-import { fetchProducts, fetchCategories, getStoredUser, getImageUrl } from "../../services/api";
+import { useRouter } from "next/navigation";
+import NavbarUser from "../../components/Navbar";
+import { fetchProducts, fetchCategories, getStoredUser, getImageUrl } from "../../../services/api";
+
+const CATEGORY_SLUG_MAP: Record<string, string> = {
+  "ruang-tamu": "Ruang Tamu",
+  "kamar-tidur": "Kamar Tidur",
+  "ruang-makan": "Ruang Makan",
+  "kursi": "Kursi",
+  "meja": "Meja",
+  "lampu": "Lampu",
+  "dekorasi": "Dekorasi",
+  "penyimpanan": "Penyimpanan",
+};
 
 const SORTS = ["Terbaru", "Harga: Rendah ke Tinggi", "Harga: Tinggi ke Rendah", "Paling Populer"];
 
@@ -21,21 +33,10 @@ interface KoleksiProduct {
   category?: { id?: number; name?: string };
 }
 
-interface Category {
-  id: number;
-  name: string;
-  imageUrl?: string;
-  description?: string;
-}
-
-function toSlug(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, "-");
-}
-
 function Stars({ n }: { n: number }) {
   return (
     <span style={{ display: "flex", gap: "2px" }}>
-      {[1,2,3,4,5].map(i => (
+      {[1, 2, 3, 4, 5].map(i => (
         <svg key={i} width="10" height="10" viewBox="0 0 24 24" fill={i <= Math.round(n) ? "var(--copper)" : "var(--stone-light)"} stroke="none">
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
         </svg>
@@ -45,9 +46,17 @@ function Stars({ n }: { n: number }) {
   );
 }
 
-export default function KoleksiPage() {
+interface Category {
+  id: number;
+  name: string;
+  imageUrl?: string;
+  description?: string;
+}
+
+export default function KoleksiCategoryPage({ params }: { params: Promise<{ category: string }> }) {
+  const { category: categorySlug } = use(params);
+  const router = useRouter();
   const user = getStoredUser();
-  const [activeCategory, setActiveCategory] = useState<string>("semua");
   const [activeSort, setActiveSort] = useState("Terbaru");
   const [sortOpen, setSortOpen] = useState(false);
   const [hovered, setHovered] = useState<number | null>(null);
@@ -56,13 +65,17 @@ export default function KoleksiPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const categoryName = CATEGORY_SLUG_MAP[categorySlug.toLowerCase()] || categorySlug;
+  const currentCategory = categories.find(c => c.name.toLowerCase() === categorySlug.toLowerCase());
+  const categoryId = currentCategory?.id;
+
   useEffect(() => {
     let active = true;
     async function loadData() {
       try {
         const [categoriesData, productsData] = await Promise.all([
           fetchCategories(),
-          fetchProducts(),
+          categoryId ? fetchProducts(0, 50, categoryId) : Promise.resolve([])
         ]);
         if (!active) return;
         setCategories(Array.isArray(categoriesData) ? categoriesData : []);
@@ -75,22 +88,7 @@ export default function KoleksiPage() {
     }
     void loadData();
     return () => { active = false; };
-  }, []);
-
-  const filtered = products.filter(p => {
-    if (activeCategory === "semua") return true;
-    const cat = categories.find(c => toSlug(c.name) === activeCategory);
-    if (!cat) return true;
-    return p.category?.id === cat.id;
-  });
-
-  const allCategories = [
-    { id: "semua", label: "Semua" },
-    ...categories.map(c => ({
-      id: toSlug(c.name),
-      label: c.name
-    }))
-  ];
+  }, [categoryId]);
 
   const formatPrice = (n: number) =>
     "Rp " + n.toLocaleString("id-ID").replace(/\./g, ".");
@@ -99,6 +97,14 @@ export default function KoleksiPage() {
     e.preventDefault();
     setWishlist(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
+
+  const allCategories = [
+    { id: "semua", label: "Semua" },
+    ...categories.map(c => ({
+      id: c.name.toLowerCase().replace(/\s+/g, "-"),
+      label: c.name
+    }))
+  ];
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bone)" }}>
@@ -124,12 +130,12 @@ export default function KoleksiPage() {
         />
         <div className="container-main" style={{ position: "relative", paddingBottom: "3rem" }}>
           <p style={{ fontSize: "0.7rem", color: "rgba(245,240,232,0.45)", letterSpacing: "0.12em", marginBottom: "0.75rem" }}>
-            <Link href="/dashboard" style={{ color: "inherit" }}>Beranda</Link>
+            <Link href="/koleksi" style={{ color: "inherit" }}>Koleksi</Link>
             {" / "}
-            <span style={{ color: "var(--copper)" }}>Koleksi</span>
+            <span style={{ color: "var(--copper)" }}>{categoryName}</span>
           </p>
           <p className="text-label" style={{ color: "var(--copper)", marginBottom: "0.5rem" }}>
-            Temukan Gaya Anda
+            {categoryName}
           </p>
           <h1
             style={{
@@ -140,7 +146,7 @@ export default function KoleksiPage() {
               lineHeight: 1.1,
             }}
           >
-            Koleksi <em style={{ fontStyle: "italic" }}>Maison</em>
+            Koleksi <em style={{ fontStyle: "italic" }}>{categoryName}</em>
           </h1>
         </div>
       </section>
@@ -156,21 +162,17 @@ export default function KoleksiPage() {
                   padding: "1.1rem 1.5rem",
                   fontFamily: "var(--font-body)",
                   fontSize: "0.78rem",
-                  fontWeight: activeCategory === cat.id ? 600 : 400,
+                  fontWeight: categorySlug.toLowerCase() === cat.id.replace("semua", "") ? 600 : 400,
                   letterSpacing: "0.06em",
                   textTransform: "uppercase",
                   background: "none",
                   border: "none",
-                  borderBottom: `2px solid ${activeCategory === cat.id ? "var(--copper)" : "transparent"}`,
-                  color: activeCategory === cat.id ? "var(--copper)" : "var(--charcoal-soft)",
+                  borderBottom: `2px solid ${categorySlug.toLowerCase() === cat.id.replace("semua", "") ? "var(--copper)" : "transparent"}`,
+                  color: categorySlug.toLowerCase() === cat.id.replace("semua", "") ? "var(--copper)" : "var(--charcoal-soft)",
                   cursor: "pointer",
                   whiteSpace: "nowrap",
                   transition: "all 0.2s ease",
                   textDecoration: "none",
-                }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setActiveCategory(cat.id);
                 }}
               >
                 {cat.label}
@@ -183,7 +185,7 @@ export default function KoleksiPage() {
       <div className="container-main" style={{ padding: "2rem 1.5rem 4rem" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2rem" }}>
           <p style={{ fontSize: "0.82rem", color: "var(--stone)" }}>
-            Menampilkan <strong style={{ color: "var(--charcoal)" }}>{filtered.length}</strong> produk
+            Menampilkan <strong style={{ color: "var(--charcoal)" }}>{products.length}</strong> produk
           </p>
 
           <div style={{ position: "relative" }}>
@@ -246,17 +248,20 @@ export default function KoleksiPage() {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1.25rem" }} className="koleksi-grid">
-          {loading ? (
-            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "4rem 0" }}>
-              <p>Memuat produk...</p>
-            </div>
-          ) : filtered.length === 0 ? (
-            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "4rem 0" }}>
-              <p style={{ fontSize: "1.1rem", color: "var(--charcoal-soft)" }}>Tidak ada produk dalam kategori ini.</p>
-            </div>
-          ) : (
-            filtered.map(item => (
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "4rem 0" }}>
+            <p>Memuat produk...</p>
+          </div>
+        ) : products.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "4rem 0" }}>
+            <p style={{ fontSize: "1.1rem", color: "var(--charcoal-soft)" }}>Tidak ada produk dalam kategori ini.</p>
+            <Link href="/koleksi" style={{ color: "var(--copper)", marginTop: "1rem", display: "inline-block" }}>
+              Lihat semua produk
+            </Link>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1.25rem" }} className="koleksi-grid">
+            {products.map(item => (
               <Link
                 key={item.id}
                 href={`/product/${item.id}`}
@@ -335,9 +340,9 @@ export default function KoleksiPage() {
                   </div>
                 </div>
               </Link>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
 
         <div style={{ textAlign: "center", marginTop: "3rem" }}>
           <button style={{
