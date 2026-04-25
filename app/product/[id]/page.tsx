@@ -2,9 +2,9 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import NavbarUser from "../../components/NavbarUser";
-import { fetchProductById, getStoredUser, getImageUrl } from "../../../services/api";
+import { addCartItem, addToWishlist, checkWishlist, fetchProductById, getStoredUser, getImageUrl, isAuthenticated, removeFromWishlist, getProductReviews, type Review } from "../../../services/api";
 
 /* ─────────── Types ─────────── */
 interface Variant { label: string; hex: string; available: boolean }
@@ -63,15 +63,7 @@ const CATALOG: Record<string, Partial<ProductData>> = {
   "7": { name: "Ceramic Statement Vase", price: 1350000, memberPrice: 1282500, sku: "MSN-DECO-007", images: ["/product-ceramic-vase.png", "/hero-bedroom.png", "/hero-living.png", "/product-rattan-wall.png"], category: "Dekorasi", collection: "Wabi-Sabi Series", rating: 4.9, reviewCount: 82, stock: 20 },
 };
 
-const REVIEWS = [
-  { name: "Anisa R.", date: "12 Apr 2025", rating: 5, avatar: "AR", verified: true, text: "Kualitasnya luar biasa. Kain bouclé-nya sangat lembut dan tidak berbulu seperti kursi murah. Sudah 3 bulan dan masih terlihat seperti baru. Sangat puas dengan pembelian ini!" },
-  { name: "Bagas P.", date: "28 Mar 2025", rating: 5, avatar: "BP", verified: true, text: "Pengirimannya cepat dan pengemasan sangat aman. Kursinya persis seperti foto, bahkan lebih bagus di kenyataan. Warna cream-nya sangat hangat dan cocok dengan interior rumah saya." },
-  { name: "Dewi S.", date: "15 Mar 2025", rating: 4, avatar: "DS", verified: true, text: "Desainnya cantik dan elegan. Sedikit lebih kecil dari ekspektasi saya, tapi ukurannya sudah ada di deskripsi. Overall sangat happy dengan kualitas materialnya." },
-  { name: "Reza F.", date: "2 Mar 2025", rating: 5, avatar: "RF", verified: false, text: "Worth every penny! Ini adalah furniture terbaik yang pernah saya beli. Oak-nya solid banget, tidak goyang sama sekali. Maison memang tidak mengecewakan." },
-  { name: "Citra W.", date: "18 Feb 2025", rating: 5, avatar: "CW", verified: true, text: "Pelayanan customer service-nya responsif dan membantu dalam memilih warna yang tepat. Kursinya sangat nyaman untuk baca buku dan kerja dari rumah. Highly recommend!" },
-];
-
-const RELATED: any[] = [
+const RELATED: RelatedProduct[] = [
   { id: "5", name: "Oak Dining Table", price: 9800000, img: "/product-table.png", imageUrl: "/product-table.png", rating: 4.8 },
   { id: "6", name: "Rattan Pendant Lamp", price: 2750000, img: "/product-lamp.png", imageUrl: "/product-lamp.png", rating: 4.8 },
   { id: "7", name: "Ceramic Statement Vase", price: 1350000, img: "/product-ceramic-vase.png", imageUrl: "/product-ceramic-vase.png", rating: 4.9 },
@@ -80,6 +72,17 @@ const RELATED: any[] = [
 
 function formatRp(n: number) {
   return "Rp " + n.toLocaleString("id-ID");
+}
+
+function getInitials(name?: string | null): string {
+  if (!name) return "??";
+  const clean = name.trim();
+  if (!clean) return "??";
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function Stars({ n, size = 14 }: { n: number; size?: number }) {
@@ -108,20 +111,64 @@ function RatingBar({ label, count, total }: { label: string; count: number; tota
   );
 }
 
+interface ProductApiData {
+  id?: number;
+  name?: string;
+  collection?: { name?: string } | null;
+  category?: { name?: string } | null;
+  price?: number;
+  salePrice?: number | null;
+  rating?: number;
+  reviewCount?: number;
+  stock?: number;
+  sku?: string;
+  imageUrl?: string;
+  description?: string;
+  material?: string;
+  dimensions?: string;
+  weightKg?: number;
+  assemblyRequired?: boolean;
+  warrantyMonths?: number;
+}
+
+interface RelatedProduct {
+  id: string;
+  name: string;
+  price: number;
+  img: string;
+  imageUrl: string;
+  rating: number;
+}
+
 /* ─────────── Page ─────────── */
 export default function ProductPage() {
+  const router = useRouter();
   const user = getStoredUser();
   const { id } = useParams() as { id: string };
   const override = CATALOG[id] ?? {};
-  const [productData, setProductData] = useState<any>(null);
+  const [productData, setProductData] = useState<ProductApiData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeImg, setActiveImg] = useState(0);
+  const [imgZoom, setImgZoom] = useState(false);
+  const [selectedVariant, setSelectedVariant] = useState(0);
+  const [qty, setQty] = useState(1);
+  const [inWishlist, setInWishlist] = useState(false);
+  const [inCart, setInCart] = useState(false);
+  const [cartLoading, setCartLoading] = useState(false);
+  const [cartError, setCartError] = useState("");
+  const [openAccordion, setOpenAccordion] = useState<string>("description");
+  const [hoverRelated, setHoverRelated] = useState<string | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [liveAverageRating, setLiveAverageRating] = useState<number | null>(null);
+  const [liveTotalReviews, setLiveTotalReviews] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadProduct() {
       try {
         const data = await fetchProductById(Number(id));
         if (data) {
-          setProductData(data);
+          setProductData(data as ProductApiData);
         }
       } catch (error) {
         console.error("Failed to load product:", error);
@@ -129,7 +176,45 @@ export default function ProductPage() {
         setLoading(false);
       }
     }
-    loadProduct();
+
+    void loadProduct();
+  }, [id]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadReviews() {
+      try {
+        const data = await getProductReviews(Number(id));
+        if (!active) return;
+        setReviews(Array.isArray(data.reviews) ? data.reviews : []);
+        setLiveAverageRating(typeof data.averageRating === "number" ? data.averageRating : 0);
+        setLiveTotalReviews(typeof data.totalReviews === "number" ? data.totalReviews : 0);
+      } catch (error) {
+        if (!active) return;
+        console.error("Failed to load reviews:", error);
+        setReviews([]);
+        setLiveAverageRating(0);
+        setLiveTotalReviews(0);
+      } finally {
+        if (active) setReviewsLoading(false);
+      }
+    }
+    void loadReviews();
+    return () => { active = false; };
+  }, [id]);
+
+  useEffect(() => {
+    async function loadWishlistStatus() {
+      if (!isAuthenticated()) {
+        setInWishlist(false);
+        return;
+      }
+
+      const wished = await checkWishlist(Number(id));
+      setInWishlist(wished);
+    }
+
+    void loadWishlistStatus();
   }, [id]);
 
   const product: ProductData = productData ? {
@@ -161,6 +246,73 @@ export default function ProductPage() {
     tags: [productData.category?.name || "Furniture"],
   } : { ...DEFAULT, ...override, id };
 
+  const relatedProducts: RelatedProduct[] = RELATED;
+  const displayPrice = product.salePrice ?? product.price;
+
+  // Use live review data if available, otherwise fallback to product aggregate
+  const effectiveTotalReviews = liveTotalReviews ?? product.reviewCount;
+  const effectiveRating = liveAverageRating !== null && liveTotalReviews && liveTotalReviews > 0
+    ? liveAverageRating
+    : product.rating;
+
+  const ratingBreakdown = (() => {
+    const buckets: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    if (reviews.length > 0) {
+      reviews.forEach(r => {
+        const rounded = Math.max(1, Math.min(5, Math.round(r.rating || 0)));
+        buckets[rounded] = (buckets[rounded] || 0) + 1;
+      });
+    }
+    return [5, 4, 3, 2, 1].map(star => ({ label: `${star}★`, count: buckets[star] || 0 }));
+  })();
+
+  const requireAuth = () => {
+    if (isAuthenticated()) return true;
+    router.push("/login");
+    return false;
+  };
+
+  const handleAddToCart = async () => {
+    if (!requireAuth()) return;
+    if (cartLoading || product.stock <= 0) return;
+
+    setCartLoading(true);
+    setCartError("");
+
+    const result = await addCartItem(
+      Number(product.id),
+      qty,
+      product.variants[selectedVariant]?.label || "Default"
+    );
+
+    setCartLoading(false);
+
+    if (!result.success) {
+      setCartError(result.message || "Produk gagal ditambahkan ke keranjang.");
+      return;
+    }
+
+    setInCart(true);
+    setTimeout(() => router.push("/cart"), 650);
+  };
+
+  const handleProtectedWishlist = async () => {
+    if (!requireAuth()) return;
+
+    const result = inWishlist
+      ? await removeFromWishlist(Number(product.id))
+      : await addToWishlist(Number(product.id));
+
+    if (result.success) {
+      setInWishlist(!inWishlist);
+    }
+  };
+
+  const handleWriteReview = () => {
+    if (!requireAuth()) return;
+    router.push("/dashboard/orders");
+  };
+
   if (loading) {
     return (
       <div style={{ minHeight: "100vh", background: "var(--bone)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -168,29 +320,6 @@ export default function ProductPage() {
       </div>
     );
   }
-
-  const [activeImg, setActiveImg] = useState(0);
-  const [imgZoom, setImgZoom] = useState(false);
-  const [selectedVariant, setSelectedVariant] = useState(0);
-  const [qty, setQty] = useState(1);
-  const [inWishlist, setInWishlist] = useState(false);
-  const [inCart, setInCart] = useState(false);
-  const [openAccordion, setOpenAccordion] = useState<string>("description");
-  const [hoverRelated, setHoverRelated] = useState<string | null>(null);
-
-  const displayPrice = product.salePrice ?? product.price;
-  const ratingBreakdown = [
-    { label: "5★", count: Math.round(product.reviewCount * 0.72) },
-    { label: "4★", count: Math.round(product.reviewCount * 0.18) },
-    { label: "3★", count: Math.round(product.reviewCount * 0.06) },
-    { label: "2★", count: Math.round(product.reviewCount * 0.02) },
-    { label: "1★", count: Math.round(product.reviewCount * 0.02) },
-  ];
-
-  const handleAddToCart = () => {
-    setInCart(true);
-    setTimeout(() => setInCart(false), 2500);
-  };
 
   const toggleAccordion = (key: string) => {
     setOpenAccordion(prev => prev === key ? "" : key);
@@ -305,6 +434,8 @@ export default function ProductPage() {
       ),
     },
   ];
+
+  const selectedVariantLabel = product.variants[selectedVariant]?.label || "Default";
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bone)" }}>
@@ -424,12 +555,12 @@ export default function ProductPage() {
 
               {/* Rating row */}
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
-                <Stars n={product.rating} />
-                <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--charcoal)" }}>{product.rating.toFixed(1)}</span>
+                <Stars n={effectiveRating} />
+                <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--charcoal)" }}>{effectiveRating.toFixed(1)}</span>
                 <a href="#reviews" style={{ fontSize: "0.78rem", color: "var(--stone)", borderBottom: "1px solid var(--stone-light)", paddingBottom: "1px", transition: "color 0.2s ease" }}
                   onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--copper)")}
                   onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--stone)")}>
-                  {product.reviewCount} ulasan
+                  {effectiveTotalReviews} ulasan
                 </a>
                 <span style={{ fontSize: "0.72rem", color: "var(--stone)", marginLeft: "auto" }}>
                   Stok: <strong style={{ color: product.stock <= 3 ? "#DC2626" : "var(--charcoal)" }}>{product.stock} tersedia</strong>
@@ -474,7 +605,7 @@ export default function ProductPage() {
                   <p style={{ fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--charcoal)", marginBottom: "0.75rem" }}>
                     Pilihan Warna / Material:{" "}
                     <span style={{ fontWeight: 400, color: "var(--copper)", textTransform: "none" }}>
-                      {product.variants[selectedVariant]?.label}
+                      {selectedVariantLabel}
                     </span>
                   </p>
                   <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
@@ -553,18 +684,24 @@ export default function ProductPage() {
                 <button
                   onClick={handleAddToCart}
                   id="add-to-cart-btn"
+                  disabled={cartLoading || product.stock <= 0}
                   style={{
                     width: "100%", padding: "1.1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem",
-                    background: inCart ? "#198754" : "var(--charcoal)",
+                    background: inCart ? "#198754" : product.stock <= 0 ? "var(--stone-light)" : "var(--charcoal)",
                     border: "none", color: "var(--cream)",
                     fontFamily: "var(--font-body)", fontSize: "0.82rem", fontWeight: 500,
                     letterSpacing: "0.14em", textTransform: "uppercase",
-                    cursor: "pointer", transition: "background 0.3s ease",
+                    cursor: cartLoading || product.stock <= 0 ? "not-allowed" : "pointer", transition: "background 0.3s ease",
                   }}
-                  onMouseEnter={e => !inCart && ((e.currentTarget as HTMLButtonElement).style.background = "var(--copper)")}
-                  onMouseLeave={e => !inCart && ((e.currentTarget as HTMLButtonElement).style.background = "var(--charcoal)")}
+                  onMouseEnter={e => !inCart && product.stock > 0 && ((e.currentTarget as HTMLButtonElement).style.background = "var(--copper)")}
+                  onMouseLeave={e => !inCart && product.stock > 0 && ((e.currentTarget as HTMLButtonElement).style.background = "var(--charcoal)")}
                 >
-                  {inCart ? (
+                  {cartLoading ? (
+                    <>
+                      <span style={{ width: "14px", height: "14px", border: "2px solid rgba(255,255,255,0.45)", borderTopColor: "var(--cream)", borderRadius: "50%", display: "inline-block", animation: "spin 0.8s linear infinite" }} />
+                      Menambahkan...
+                    </>
+                  ) : inCart ? (
                     <>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <polyline points="20 6 9 17 4 12" />
@@ -580,11 +717,16 @@ export default function ProductPage() {
                     </>
                   )}
                 </button>
+                {cartError && (
+                  <p style={{ fontSize: "0.76rem", color: "#DC2626", lineHeight: 1.6 }}>
+                    {cartError}
+                  </p>
+                )}
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "0.75rem" }}>
                   {/* Wishlist */}
                   <button
-                    onClick={() => setInWishlist(!inWishlist)}
+                    onClick={handleProtectedWishlist}
                     id="wishlist-btn"
                     style={{
                       padding: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.6rem",
@@ -695,15 +837,15 @@ export default function ProductPage() {
             <div>
               <p className="text-label" style={{ color: "var(--copper)", marginBottom: "0.5rem" }}>Ulasan Pembeli</p>
               <h2 style={{ fontFamily: "var(--font-display)", fontSize: "2.5rem", fontWeight: 300, color: "var(--charcoal)", lineHeight: 1 }}>
-                {product.rating.toFixed(1)}
+                {effectiveRating.toFixed(1)}
               </h2>
-              <div style={{ margin: "0.6rem 0" }}><Stars n={product.rating} size={18} /></div>
+              <div style={{ margin: "0.6rem 0" }}><Stars n={effectiveRating} size={18} /></div>
               <p style={{ fontSize: "0.78rem", color: "var(--stone)", marginBottom: "1.75rem" }}>
-                dari {product.reviewCount} ulasan terverifikasi
+                dari {effectiveTotalReviews} ulasan terverifikasi
               </p>
 
               {ratingBreakdown.map(rb => (
-                <RatingBar key={rb.label} label={rb.label} count={rb.count} total={product.reviewCount} />
+                <RatingBar key={rb.label} label={rb.label} count={rb.count} total={Math.max(effectiveTotalReviews, 1)} />
               ))}
 
               <button style={{
@@ -713,6 +855,7 @@ export default function ProductPage() {
                 letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer",
                 transition: "background 0.3s ease",
               }}
+              onClick={handleWriteReview}
               onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = "var(--copper)")}
               onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = "var(--charcoal)")}>
                 Tulis Ulasan
@@ -721,47 +864,91 @@ export default function ProductPage() {
 
             {/* Right: Individual reviews */}
             <div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                {REVIEWS.map((rev, i) => (
-                  <div key={i} style={{
-                    padding: "1.5rem 1.75rem",
-                    background: "var(--bone)", border: "1px solid var(--stone-light)",
+              {reviewsLoading ? (
+                <div style={{
+                  padding: "3rem 2rem", textAlign: "center",
+                  background: "var(--bone)", border: "1px solid var(--stone-light)",
+                }}>
+                  <div style={{
+                    width: "32px", height: "32px", margin: "0 auto 0.85rem",
+                    border: "2px solid var(--stone-light)", borderTopColor: "var(--copper)",
+                    borderRadius: "50%", animation: "spin 0.8s linear infinite",
+                  }} />
+                  <p style={{ fontSize: "0.82rem", color: "var(--stone)", letterSpacing: "0.08em" }}>
+                    Memuat ulasan...
+                  </p>
+                </div>
+              ) : reviews.length === 0 ? (
+                <div style={{
+                  padding: "3rem 2rem", textAlign: "center",
+                  background: "var(--bone)", border: "1px solid var(--stone-light)",
+                }}>
+                  <div style={{
+                    width: "54px", height: "54px", margin: "0 auto 1rem",
+                    borderRadius: "50%", background: "rgba(196,113,58,0.08)",
+                    border: "1px solid rgba(196,113,58,0.18)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem", marginBottom: "0.75rem" }}>
-                      {/* Avatar */}
-                      <div style={{
-                        width: "40px", height: "40px", borderRadius: "50%",
-                        background: "var(--charcoal)", color: "var(--cream)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.05em", flexShrink: 0,
-                      }}>
-                        {rev.avatar}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                          <p style={{ fontWeight: 600, fontSize: "0.85rem", color: "var(--charcoal)" }}>{rev.name}</p>
-                          {rev.verified && (
-                            <span style={{
-                              display: "inline-flex", alignItems: "center", gap: "0.25rem",
-                              fontSize: "0.62rem", color: "#16A34A", letterSpacing: "0.06em",
-                            }}>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="#16A34A" stroke="none">
-                                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                              </svg>
-                              Pembelian Terverifikasi
-                            </span>
-                          )}
-                          <span style={{ fontSize: "0.72rem", color: "var(--stone)", marginLeft: "auto" }}>{rev.date}</span>
-                        </div>
-                        <Stars n={rev.rating} size={12} />
-                      </div>
-                    </div>
-                    <p style={{ fontSize: "0.85rem", color: "var(--charcoal-soft)", lineHeight: 1.8 }}>
-                      {rev.text}
-                    </p>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--copper)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
                   </div>
-                ))}
-              </div>
+                  <p style={{ fontFamily: "var(--font-display)", fontSize: "1.2rem", fontWeight: 300, color: "var(--charcoal)", marginBottom: "0.35rem" }}>
+                    Belum Ada Ulasan
+                  </p>
+                  <p style={{ fontSize: "0.82rem", color: "var(--stone)", lineHeight: 1.6, maxWidth: "320px", margin: "0 auto" }}>
+                    Jadilah yang pertama mengulas produk ini setelah pesanan selesai.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+                  {reviews.map(rev => {
+                    const initials = getInitials(rev.userName);
+                    const dateStr = rev.createdAt
+                      ? new Date(rev.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
+                      : "-";
+                    return (
+                      <div key={rev.id} style={{
+                        padding: "1.5rem 1.75rem",
+                        background: "var(--bone)", border: "1px solid var(--stone-light)",
+                      }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem", marginBottom: "0.75rem" }}>
+                          {/* Avatar */}
+                          <div style={{
+                            width: "40px", height: "40px", borderRadius: "50%",
+                            background: "var(--charcoal)", color: "var(--cream)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.05em", flexShrink: 0,
+                          }}>
+                            {initials}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                              <p style={{ fontWeight: 600, fontSize: "0.85rem", color: "var(--charcoal)" }}>{rev.userName || "Anonim"}</p>
+                              <span style={{
+                                display: "inline-flex", alignItems: "center", gap: "0.25rem",
+                                fontSize: "0.62rem", color: "#16A34A", letterSpacing: "0.06em",
+                              }}>
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5">
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                                Pembelian Terverifikasi
+                              </span>
+                              <span style={{ fontSize: "0.72rem", color: "var(--stone)", marginLeft: "auto" }}>{dateStr}</span>
+                            </div>
+                            <Stars n={rev.rating} size={12} />
+                          </div>
+                        </div>
+                        {rev.comment && (
+                          <p style={{ fontSize: "0.85rem", color: "var(--charcoal-soft)", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
+                            {rev.comment}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -787,7 +974,7 @@ export default function ProductPage() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1.25rem" }} className="related-grid">
-            {RELATED.map(item => (
+            {relatedProducts.map(item => (
               <Link
                 key={item.id}
                 href={`/product/${item.id}`}
@@ -826,6 +1013,9 @@ export default function ProductPage() {
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
         .product-main-grid { grid-template-columns: 1fr 1fr !important; }
         .reviews-grid { grid-template-columns: 280px 1fr !important; }

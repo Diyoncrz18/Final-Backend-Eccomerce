@@ -12,9 +12,35 @@ const CATEGORIES = [
   { id: "lampu", label: "Lampu" },
   { id: "dekorasi", label: "Dekorasi" },
   { id: "penyimpanan", label: "Penyimpanan" },
+  { id: "test", label: "Test" },
 ];
 
 const SORTS = ["Terbaru", "Harga: Rendah ke Tinggi", "Harga: Tinggi ke Rendah", "Paling Populer"];
+
+interface KoleksiProduct {
+  id: number;
+  name: string;
+  img?: string;
+  imageUrl?: string;
+  tag?: string;
+  new?: boolean;
+  price?: number;
+  salePrice?: number | null;
+  memberPrice?: number;
+  rating?: number;
+  category?: { name?: string };
+}
+
+function readInitialCategory(): string {
+  if (typeof window === "undefined") return "semua";
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const kategori = params.get("kategori");
+    return kategori ? kategori.toLowerCase() : "semua";
+  } catch {
+    return "semua";
+  }
+}
 
 function Stars({ n }: { n: number }) {
   return (
@@ -31,29 +57,36 @@ function Stars({ n }: { n: number }) {
 
 export default function KoleksiPage() {
   const user = getStoredUser();
-  const [activeCategory, setActiveCategory] = useState("semua");
+  const [activeCategory, setActiveCategory] = useState<string>(readInitialCategory());
   const [activeSort, setActiveSort] = useState("Terbaru");
   const [sortOpen, setSortOpen] = useState(false);
   const [hovered, setHovered] = useState<number | null>(null);
   const [wishlist, setWishlist] = useState<number[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<KoleksiProduct[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
     async function loadProducts() {
       try {
         const data = await fetchProducts();
-        setProducts(data);
+        if (!active) return;
+        setProducts(Array.isArray(data) ? (data as KoleksiProduct[]) : []);
       } catch (error) {
         console.error("Failed to load products:", error);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
-    loadProducts();
+    void loadProducts();
+    return () => { active = false; };
   }, []);
 
-  const filtered = products.filter(p => activeCategory === "semua" || p.category?.name.toLowerCase() === activeCategory);
+  useEffect(() => {
+    // URL param handled by readInitialCategory() in useState initializer
+  }, []);
+
+  const filtered = products.filter(p => activeCategory === "semua" || p.category?.name?.toLowerCase() === activeCategory);
 
   const formatPrice = (n: number) =>
     "Rp " + n.toLocaleString("id-ID").replace(/\./g, ".");

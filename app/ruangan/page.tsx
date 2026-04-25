@@ -3,9 +3,35 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../components/NavbarUser";
-import { fetchCategories, fetchProducts, getImageUrl, getStoredUser } from "../../services/api";
+import { fetchCategories, getImageUrl, getStoredUser } from "../../services/api";
 
-const INSPIRATIONS: any[] = [
+interface Inspiration {
+  title: string;
+  subtitle: string;
+  img: string;
+  imageUrl: string;
+  tag: string;
+}
+
+interface Room {
+  id: string;
+  name: string;
+  nameEn: string;
+  desc: string;
+  count: number;
+  img: string;
+  imageUrl: string;
+}
+
+interface ApiCategory {
+  id?: number | string;
+  name?: string;
+  description?: string;
+  imageUrl?: string;
+  productCount?: number;
+}
+
+const INSPIRATIONS: Inspiration[] = [
   { title: "Japandi Minimalism", subtitle: "Perpaduan Jepang & Skandinavia", img: "/hero-living.png", imageUrl: "/hero-living.png", tag: "Tren 2025" },
   { title: "Warm Earthy Tones", subtitle: "Nuansa Bumi yang Hangat", img: "/hero-bedroom.png", imageUrl: "/hero-bedroom.png", tag: "Editor's Pick" },
   { title: "Modern Mediterranean", subtitle: "Estetika Mediterania Kontemporer", img: "/hero-living.png", imageUrl: "/hero-living.png", tag: "Koleksi Baru" },
@@ -13,32 +39,40 @@ const INSPIRATIONS: any[] = [
 
 export default function RuanganPage() {
   const user = getStoredUser();
-  const [rooms, setRooms] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [hoveredRoom, setHoveredRoom] = useState<string | null>(null);
   const [hoveredInspir, setHoveredInspir] = useState<number | null>(null);
 
   useEffect(() => {
+    let active = true;
     async function loadData() {
       try {
-        const categories = await fetchCategories();
-        setRooms(categories.map((cat: any, idx: number) => ({
-          id: cat.id?.toString() || String(idx),
-          name: cat.name || "Unknown",
-          name_en: cat.name || "Unknown",
+        const raw = await fetchCategories();
+        if (!active) return;
+        const categories: ApiCategory[] = Array.isArray(raw) ? raw : [];
+        const mapped: Room[] = categories.map((cat, idx) => ({
+          id: cat.id != null ? String(cat.id) : String(idx),
+          name: cat.name || "Kategori",
+          nameEn: cat.name || "Category",
           desc: cat.description || "Temukan furnitur terbaik untuk ruangan Anda.",
-          count: cat.productCount || 0,
+          count: Number(cat.productCount ?? 0),
           img: cat.imageUrl || "/hero-living.png",
-          accent: idx % 2 === 0 ? "rgba(196,113,58,0.15)" : "rgba(109,89,76,0.15)",
-        })));
+          imageUrl: cat.imageUrl || "/hero-living.png",
+        }));
+        setRooms(mapped);
       } catch (error) {
         console.error("Failed to load rooms:", error);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
-    loadData();
+    void loadData();
+    return () => { active = false; };
   }, []);
+
+  const totalProducts = rooms.reduce((s, r) => s + r.count, 0);
+  const totalRooms = rooms.length;
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bone)" }}>
@@ -88,9 +122,9 @@ export default function RuanganPage() {
         <div className="container-main">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)" }} className="stats-grid">
             {[
-              { num: "167+", label: "Produk Tersedia" },
-              { num: "6", label: "Kategori Ruangan" },
-              { num: "12", label: "Gaya Desain" },
+              { num: loading ? "…" : `${totalProducts}+`, label: "Produk Tersedia" },
+              { num: loading ? "…" : String(totalRooms), label: "Kategori Ruangan" },
+              { num: String(INSPIRATIONS.length), label: "Gaya Desain" },
             ].map(s => (
               <div key={s.label} style={{ padding: "1.75rem", textAlign: "center", borderRight: "1px solid var(--stone-light)" }}>
                 <p style={{ fontFamily: "var(--font-display)", fontSize: "2rem", fontWeight: 300, color: "var(--copper)", lineHeight: 1 }}>
@@ -117,10 +151,41 @@ export default function RuanganPage() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.25rem" }} className="rooms-grid">
-            {rooms.map(room => (
+            {loading ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <div key={`skeleton-${i}`} style={{
+                  border: "1px solid var(--stone-light)",
+                  background: "var(--white)",
+                  overflow: "hidden",
+                }}>
+                  <div style={{
+                    aspectRatio: "3/2", background: "var(--bone)",
+                    animation: "pulse 1.6s ease-in-out infinite",
+                  }} />
+                  <div style={{ padding: "1.5rem" }}>
+                    <div style={{ height: "12px", background: "var(--bone)", marginBottom: "0.6rem", width: "60%" }} />
+                    <div style={{ height: "10px", background: "var(--bone)", marginBottom: "0.4rem", width: "100%" }} />
+                    <div style={{ height: "10px", background: "var(--bone)", width: "80%" }} />
+                  </div>
+                </div>
+              ))
+            ) : rooms.length === 0 ? (
+              <div style={{
+                gridColumn: "1 / -1",
+                padding: "4rem 2rem", textAlign: "center",
+                background: "var(--white)", border: "1px solid var(--stone-light)",
+              }}>
+                <p style={{ fontFamily: "var(--font-display)", fontSize: "1.4rem", fontWeight: 300, color: "var(--charcoal)", marginBottom: "0.5rem" }}>
+                  Belum Ada Kategori
+                </p>
+                <p style={{ fontSize: "0.85rem", color: "var(--stone)" }}>
+                  Silakan kembali lagi nanti.
+                </p>
+              </div>
+            ) : rooms.map(room => (
               <Link
                 key={room.id}
-                href={`/ruangan/${room.id}`}
+                href={`/koleksi?kategori=${encodeURIComponent(room.name.toLowerCase())}`}
                 style={{ display: "block", textDecoration: "none" }}
                 onMouseEnter={() => setHoveredRoom(room.id)}
                 onMouseLeave={() => setHoveredRoom(null)}
@@ -147,7 +212,7 @@ export default function RuanganPage() {
                     {/* Overlay content */}
                     <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "1.5rem" }}>
                       <p style={{ fontFamily: "var(--font-body)", fontSize: "0.62rem", letterSpacing: "0.2em", color: "var(--copper)", textTransform: "uppercase", marginBottom: "0.3rem" }}>
-                        {room.name_en}
+                        {room.nameEn}
                       </p>
                       <h3 style={{ fontFamily: "var(--font-display)", fontSize: "1.5rem", fontWeight: 300, color: "var(--cream)", lineHeight: 1.15 }}>
                         {room.name}
@@ -173,19 +238,9 @@ export default function RuanganPage() {
                     borderTop: `3px solid ${hoveredRoom === room.id ? "var(--copper)" : "transparent"}`,
                     transition: "border-color 0.3s ease",
                   }}>
-                    <p style={{ fontSize: "0.82rem", color: "var(--charcoal-soft)", lineHeight: 1.7, marginBottom: "1rem" }}>
+                    <p style={{ fontSize: "0.82rem", color: "var(--charcoal-soft)", lineHeight: 1.7, marginBottom: "1rem", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                       {room.desc}
                     </p>
-                    <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "1rem" }}>
-                      {room.products.map((p: string) => (
-                        <span key={p} style={{
-                          padding: "0.2rem 0.65rem", background: "var(--bone)",
-                          fontSize: "0.62rem", color: "var(--charcoal-soft)", letterSpacing: "0.06em",
-                        }}>
-                          {p}
-                        </span>
-                      ))}
-                    </div>
                     <p style={{
                       fontSize: "0.72rem", fontWeight: 500, letterSpacing: "0.1em",
                       textTransform: "uppercase", color: "var(--copper)",
@@ -267,6 +322,10 @@ export default function RuanganPage() {
         .rooms-grid { grid-template-columns: repeat(3, 1fr) !important; }
         .stats-grid { grid-template-columns: repeat(3, 1fr) !important; }
         .inspir-grid { grid-template-columns: repeat(3, 1fr) !important; }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.55; }
+        }
         @media (max-width: 1024px) {
           .rooms-grid { grid-template-columns: repeat(2, 1fr) !important; }
           .inspir-grid { grid-template-columns: repeat(2, 1fr) !important; }

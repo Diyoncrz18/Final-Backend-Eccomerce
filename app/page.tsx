@@ -2,9 +2,10 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
-import { fetchProducts, fetchCategories, getImageUrl } from "../services/api";
+import { fetchProducts, fetchCategories, getImageUrl, isAuthenticated } from "../services/api";
 
 /* ============================================================
    DATA
@@ -319,7 +320,23 @@ function MarqueeSection() {
    SECTION: FEATURED PRODUCTS
    ============================================================ */
 function ProductCard({ product }: any) {
+  const router = useRouter();
   const [wished, setWished] = useState(false);
+
+  const requireAuth = () => {
+    if (isAuthenticated()) return true;
+    router.push("/login");
+    return false;
+  };
+
+  const handleWishlist = () => {
+    if (!requireAuth()) return;
+    setWished(!wished);
+  };
+
+  const handleProtectedCart = () => {
+    if (!requireAuth()) return;
+  };
 
   return (
     <article
@@ -360,7 +377,7 @@ function ProductCard({ product }: any) {
 
         {/* Wishlist */}
         <button
-          onClick={() => setWished(!wished)}
+          onClick={handleWishlist}
           aria-label={wished ? "Hapus dari wishlist" : "Tambah ke wishlist"}
           id={`wishlist-${product.id}`}
           style={{
@@ -390,6 +407,7 @@ function ProductCard({ product }: any) {
         <div className="product-card-overlay">
           <button
             id={`add-cart-${product.id}`}
+            onClick={handleProtectedCart}
             style={{
               width: "100%",
               padding: "0.85rem",
