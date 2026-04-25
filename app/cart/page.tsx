@@ -2,23 +2,84 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import NavbarUser from "../components/NavbarUser";
-import { fetchProducts, getAuthToken, getImageUrl, getStoredUser } from "../../services/api";
+import { addCartItem, addToWishlist, clearServerCart, fetchProducts, getCart, getImageUrl, getStoredUser, isAuthenticated, removeCartItem, updateCartItemQuantity, validateVoucher } from "../../services/api";
 
 /* ─────────── Types ─────────── */
-interface CartItem {
-  id: number; name: string; variant: string; price: number;
-  qty: number; img: string; imageUrl?: string; sku: string; stock: number; category: string;
+interface PageCartItem {
+  id: number;
+  productId: number;
+  name: string;
+  variant: string;
+  price: number;
+  qty: number;
+  img: string;
+  imageUrl?: string;
+  sku: string;
+  stock: number;
+  category: string;
 }
 
-/* ─────────── Initial Cart ─────────── */
-const INITIAL_CART: CartItem[] = [];
+interface RecommendationItem {
+  id: number;
+  name: string;
+  price: number;
+  img: string;
+  imageUrl?: string;
+  rating: number;
+}
 
-const PROMO_CODES: Record<string, number> = {
-  "MAISON10": 10,
-  "WELCOME15": 15,
-  "MEMBER20": 20,
-};
+interface ProductRecommendationSource {
+  id?: number;
+  name?: string;
+  price?: number;
+  imageUrl?: string;
+  rating?: number;
+}
+
+function mapCartItem(item: {
+  id: number;
+  productId: number;
+  productName: string;
+  productImage: string;
+  variant: string;
+  price: number;
+  quantity: number;
+  stock: number;
+}): PageCartItem {
+  return {
+    id: item.id,
+    productId: item.productId,
+    name: item.productName,
+    variant: item.variant,
+    price: item.price,
+    qty: item.quantity,
+    img: item.productImage,
+    imageUrl: item.productImage,
+    sku: `SKU-${item.productId}`,
+    stock: item.stock,
+    category: "Furniture",
+  };
+}
+
+async function saveCartItemToWishlist(item: PageCartItem) {
+  return addToWishlist(item.productId || item.id);
+}
+
+interface AppliedPromo {
+  code: string;
+  discountType: string;
+  discountValue: number;
+}
+
+function calculatePromoDiscount(promo: AppliedPromo | null, subtotal: number) {
+  if (!promo) return 0;
+  if (promo.discountType === "FIXED") {
+    return Math.min(subtotal, Math.round(promo.discountValue));
+  }
+  return Math.round(subtotal * (promo.discountValue / 100));
+}
 
 function formatRp(n: number) {
   return "Rp " + n.toLocaleString("id-ID");
@@ -76,33 +137,54 @@ function EmptyCart() {
 
 /* ─────────── Main Page ─────────── */
 export default function CartPage() {
+  const router = useRouter();
   const user = getStoredUser();
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [recommendations, setRecommendations] = useState<any[]>([]);
+  const [items, setItems] = useState<PageCartItem[]>([]);
+
+  const requireAuth = () => {
+    if (isAuthenticated()) return true;
+    router.push("/login");
+    return false;
+  };
+  const [recommendations, setRecommendations] = useState<RecommendationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [promoCode, setPromoCode] = useState("");
-  const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
   const [promoError, setPromoError] = useState("");
   const [promoSuccess, setPromoSuccess] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [cartError, setCartError] = useState("");
+  const [cartMessage, setCartMessage] = useState("");
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [wishlistSavingId, setWishlistSavingId] = useState<number | null>(null);
+  const [clearingCart, setClearingCart] = useState(false);
   const [hoverRec, setHoverRec] = useState<number | null>(null);
   const [usePoints, setUsePoints] = useState(false);
+
+  const loadCartFromServer = async () => {
+    const cart = await getCart();
+    setItems(cart.items.map(mapCartItem));
+  };
 
   useEffect(() => {
     async function loadData() {
       try {
-        // Load cart from localStorage
-        const savedCart = localStorage.getItem('cart');
-        if (savedCart) {
-          setItems(JSON.parse(savedCart));
+        if (!isAuthenticated()) {
+          router.push("/login");
+          return;
         }
-        
-        // Load recommendations from API
-        const products = await fetchProducts(0, 4);
+
+        const [cart, products] = await Promise.all([
+          getCart(),
+          fetchProducts(0, 4),
+        ]);
+
+        setItems(cart.items.map(mapCartItem));
         if (products.length > 0) {
-          setRecommendations(products.map((p: any) => ({
-            id: p.id,
-            name: p.name,
+          setRecommendations((products as ProductRecommendationSource[]).map((p) => ({
+            id: Number(p.id) || 0,
+            name: p.name || "Produk",
             price: Number(p.price),
             img: p.imageUrl || "/product-chair.png",
             rating: Number(p.rating) || 4.5,
@@ -114,47 +196,114 @@ export default function CartPage() {
         setLoading(false);
       }
     }
-    loadData();
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(items));
-  }, [items]);
+    void loadData();
+  }, [router]);
 
   /* Calculations */
   const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
   const shipping = subtotal >= 5000000 ? 0 : 150000;
-  const promoDisc = appliedPromo ? Math.round(subtotal * (PROMO_CODES[appliedPromo] / 100)) : 0;
+  const promoDisc = calculatePromoDiscount(appliedPromo, subtotal);
   const memberDisc = Math.round(subtotal * 0.05); // 5% gold member
   const pointsDisc = usePoints ? Math.min((user.points || 0) * 10, subtotal * 0.1) : 0; // 10 pts = Rp10, max 10%
   const total = subtotal + shipping - promoDisc - memberDisc - pointsDisc;
   const pointsEarned = Math.floor(total / 10000); // 1 point per Rp10,000
 
   /* Handlers */
-  const updateQty = (id: number, delta: number) => {
-    setItems(prev => prev.map(item =>
-      item.id === id
-        ? { ...item, qty: Math.max(1, Math.min(item.stock, item.qty + delta)) }
-        : item
-    ));
+  const updateQty = async (id: number, delta: number) => {
+    const current = items.find(item => item.id === id);
+    if (!current || updatingId === id) return;
+
+    const nextQuantity = Math.max(1, Math.min(current.stock, current.qty + delta));
+    if (nextQuantity === current.qty) return;
+
+    setUpdatingId(id);
+    setCartError("");
+    setItems(prev => prev.map(item => item.id === id ? { ...item, qty: nextQuantity } : item));
+
+    const result = await updateCartItemQuantity(id, nextQuantity);
+    if (!result.success) {
+      setCartError(result.message || "Jumlah produk gagal diperbarui.");
+      await loadCartFromServer();
+    } else if (result.item) {
+      setItems(prev => prev.map(item => item.id === id ? mapCartItem(result.item!) : item));
+    }
+    setUpdatingId(null);
   };
 
-  const removeItem = (id: number) => {
+  const removeItem = async (id: number) => {
     setRemovingId(id);
-    setTimeout(() => {
+    setCartError("");
+
+    const result = await removeCartItem(id);
+    if (result.success) {
       setItems(prev => prev.filter(i => i.id !== id));
-      setRemovingId(null);
-    }, 350);
+    } else {
+      setCartError(result.message || "Produk gagal dihapus dari keranjang.");
+      await loadCartFromServer();
+    }
+    setRemovingId(null);
   };
 
-  const applyPromo = () => {
+  const clearCart = async () => {
+    setClearingCart(true);
+    setCartError("");
+
+    const result = await clearServerCart();
+    if (result.success) {
+      setItems([]);
+      setAppliedPromo(null);
+      setPromoCode("");
+    } else {
+      setCartError(result.message || "Keranjang gagal dikosongkan.");
+    }
+    setClearingCart(false);
+  };
+
+  const saveToWishlist = async (item: PageCartItem) => {
+    if (!requireAuth()) return;
+    setWishlistSavingId(item.id);
+    setCartError("");
+    setCartMessage("");
+
+    const result = await saveCartItemToWishlist(item);
+    if (result.success) {
+      setCartMessage(`${item.name} disimpan ke wishlist.`);
+    } else {
+      setCartError(result.message || "Produk gagal disimpan ke wishlist.");
+    }
+    setWishlistSavingId(null);
+  };
+
+  const addRecommendationToCart = async (item: RecommendationItem) => {
+    if (!requireAuth()) return;
+    setCartError("");
+    setCartMessage("");
+
+    const result = await addCartItem(item.id, 1, "Default");
+    if (result.success) {
+      await loadCartFromServer();
+      setCartMessage(`${item.name} ditambahkan ke keranjang.`);
+    } else {
+      setCartError(result.message || "Produk gagal ditambahkan ke keranjang.");
+    }
+  };
+
+  const applyPromo = async () => {
     const code = promoCode.trim().toUpperCase();
-    if (PROMO_CODES[code]) {
-      setAppliedPromo(code);
-      setPromoSuccess(`Kode "${code}" berhasil diterapkan — diskon ${PROMO_CODES[code]}%`);
+    if (!code) return;
+
+    setPromoLoading(true);
+    const result = await validateVoucher(code, subtotal);
+    setPromoLoading(false);
+
+    if (result.valid) {
+      const discountType = result.discountType || "PERCENT";
+      const discountValue = Number(result.discountValue || 0);
+      setAppliedPromo({ code, discountType, discountValue });
+      setPromoSuccess(`Kode "${code}" berhasil diterapkan.`);
       setPromoError("");
     } else {
-      setPromoError("Kode promo tidak valid atau sudah kadaluarsa.");
+      setPromoError(result.message || "Kode promo tidak valid atau sudah kadaluarsa.");
       setPromoSuccess("");
     }
   };
@@ -196,7 +345,21 @@ export default function CartPage() {
       </div>
 
       <div className="container-main" style={{ paddingTop: "3rem", paddingBottom: "5rem" }}>
-        {items.length === 0 ? (
+        {cartError && (
+          <div style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.18)", color: "#B91C1C", padding: "0.85rem 1rem", marginBottom: "1rem", fontSize: "0.84rem" }}>
+            {cartError}
+          </div>
+        )}
+        {cartMessage && (
+          <div style={{ background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.18)", color: "#15803D", padding: "0.85rem 1rem", marginBottom: "1rem", fontSize: "0.84rem" }}>
+            {cartMessage}
+          </div>
+        )}
+        {loading ? (
+          <div style={{ background: "var(--white)", border: "1px solid var(--stone-light)", padding: "3rem", textAlign: "center", color: "var(--stone)" }}>
+            Memuat keranjang...
+          </div>
+        ) : items.length === 0 ? (
           <EmptyCart />
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: "2.5rem", alignItems: "flex-start" }} className="cart-layout">
@@ -230,7 +393,7 @@ export default function CartPage() {
                   {/* Product info */}
                   <div style={{ display: "flex", gap: "1.25rem", alignItems: "flex-start" }}>
                     {/* Image */}
-                    <Link href={`/product/${item.id}`} style={{ flexShrink: 0, display: "block" }}>
+                    <Link href={`/product/${item.productId}`} style={{ flexShrink: 0, display: "block" }}>
                       <div style={{ width: "100px", height: "100px", position: "relative", overflow: "hidden", background: "var(--bone)", border: "1px solid var(--stone-light)" }}>
                         <Image src={getImageUrl(item.imageUrl || item.img)} alt={item.name} fill style={{ objectFit: "cover" }} />
                       </div>
@@ -240,7 +403,7 @@ export default function CartPage() {
                       <p style={{ fontSize: "0.65rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--copper)", marginBottom: "0.25rem" }}>
                         {item.category}
                       </p>
-                      <Link href={`/product/${item.id}`} style={{ display: "block", marginBottom: "0.3rem" }}>
+                      <Link href={`/product/${item.productId}`} style={{ display: "block", marginBottom: "0.3rem" }}>
                         <p style={{ fontFamily: "var(--font-display)", fontSize: "1.2rem", fontWeight: 300, color: "var(--charcoal)", lineHeight: 1.2 }}>
                           {item.name}
                         </p>
@@ -257,7 +420,7 @@ export default function CartPage() {
                       </p>
                       {/* Remove + Wishlist */}
                       <div style={{ display: "flex", gap: "1rem", marginTop: "0.75rem" }}>
-                        <button onClick={() => removeItem(item.id)}
+                        <button onClick={() => void removeItem(item.id)}
                           style={{
                             background: "none", border: "none", cursor: "pointer",
                             fontSize: "0.72rem", color: "var(--stone)", letterSpacing: "0.06em",
@@ -273,6 +436,8 @@ export default function CartPage() {
                           Hapus
                         </button>
                         <button
+                          onClick={() => void saveToWishlist(item)}
+                          disabled={wishlistSavingId === item.id}
                           style={{
                             background: "none", border: "none", cursor: "pointer",
                             fontSize: "0.72rem", color: "var(--stone)", letterSpacing: "0.06em",
@@ -285,7 +450,7 @@ export default function CartPage() {
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                           </svg>
-                          Simpan ke Wishlist
+                          {wishlistSavingId === item.id ? "Menyimpan..." : "Simpan ke Wishlist"}
                         </button>
                       </div>
                     </div>
@@ -293,11 +458,12 @@ export default function CartPage() {
 
                   {/* Qty picker */}
                   <div style={{ display: "flex", alignItems: "center", gap: 0, justifyContent: "center" }}>
-                    <button onClick={() => updateQty(item.id, -1)}
+                    <button onClick={() => void updateQty(item.id, -1)}
+                      disabled={updatingId === item.id || item.qty <= 1}
                       style={{
                         width: "38px", height: "38px", display: "flex", alignItems: "center", justifyContent: "center",
                         background: "var(--white)", border: "1px solid var(--stone-light)",
-                        cursor: "pointer", fontSize: "1.1rem", color: "var(--charcoal)",
+                        cursor: updatingId === item.id || item.qty <= 1 ? "not-allowed" : "pointer", fontSize: "1.1rem", color: item.qty <= 1 ? "var(--stone-light)" : "var(--charcoal)",
                         transition: "background 0.2s ease",
                       }}
                       onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = "var(--bone)")}
@@ -311,15 +477,15 @@ export default function CartPage() {
                     }}>
                       {item.qty}
                     </div>
-                    <button onClick={() => updateQty(item.id, 1)}
+                    <button onClick={() => void updateQty(item.id, 1)}
                       style={{
                         width: "38px", height: "38px", display: "flex", alignItems: "center", justifyContent: "center",
                         background: "var(--white)", border: "1px solid var(--stone-light)",
-                        cursor: item.qty >= item.stock ? "not-allowed" : "pointer",
+                        cursor: item.qty >= item.stock || updatingId === item.id ? "not-allowed" : "pointer",
                         fontSize: "1.1rem", color: item.qty >= item.stock ? "var(--stone-light)" : "var(--charcoal)",
                         transition: "background 0.2s ease",
                       }}
-                      disabled={item.qty >= item.stock}
+                      disabled={item.qty >= item.stock || updatingId === item.id}
                       onMouseEnter={e => item.qty < item.stock && ((e.currentTarget as HTMLButtonElement).style.background = "var(--bone)")}
                       onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = "var(--white)")}>
                       +
@@ -361,7 +527,8 @@ export default function CartPage() {
                   </svg>
                   Lanjut Belanja
                 </Link>
-                <button onClick={() => setItems([])}
+                <button onClick={() => void clearCart()}
+                  disabled={clearingCart}
                   style={{
                     background: "none", border: "none", cursor: "pointer",
                     fontSize: "0.75rem", color: "var(--stone)", letterSpacing: "0.06em",
@@ -369,7 +536,7 @@ export default function CartPage() {
                   }}
                   onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.color = "#DC2626")}
                   onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.color = "var(--stone)")}>
-                  Kosongkan Keranjang
+                  {clearingCart ? "Mengosongkan..." : "Kosongkan Keranjang"}
                 </button>
               </div>
             </div>
@@ -421,7 +588,7 @@ export default function CartPage() {
                           <span style={{
                             fontSize: "0.6rem", fontWeight: 700, color: "var(--white)",
                             background: "var(--copper)", padding: "0.1rem 0.45rem", letterSpacing: "0.08em",
-                          }}>{appliedPromo}</span>
+                          }}>{appliedPromo.code}</span>
                           <button onClick={removePromo}
                             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--stone)", lineHeight: 0, padding: 0 }}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -492,7 +659,12 @@ export default function CartPage() {
                           type="text"
                           value={promoCode}
                           onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoError(""); setPromoSuccess(""); }}
-                          onKeyDown={e => e.key === "Enter" && applyPromo()}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void applyPromo();
+                            }
+                          }}
                           placeholder="Kode promo..."
                           id="promo-input"
                           style={{
@@ -503,17 +675,18 @@ export default function CartPage() {
                             outline: "none", letterSpacing: "0.08em",
                           }}
                         />
-                        <button onClick={applyPromo}
+                        <button onClick={() => void applyPromo()}
+                          disabled={promoLoading}
                           style={{
                             padding: "0.75rem 1rem", background: "var(--charcoal)", border: "none",
                             color: "var(--cream)", fontFamily: "var(--font-body)",
                             fontSize: "0.72rem", fontWeight: 500, letterSpacing: "0.1em",
-                            textTransform: "uppercase", cursor: "pointer",
+                            textTransform: "uppercase", cursor: promoLoading ? "not-allowed" : "pointer",
                             transition: "background 0.2s ease", whiteSpace: "nowrap",
                           }}
                           onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = "var(--copper)")}
                           onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = "var(--charcoal)")}>
-                          Terapkan
+                          {promoLoading ? "Cek..." : "Terapkan"}
                         </button>
                       </div>
                       {promoError && <p style={{ fontSize: "0.72rem", color: "#DC2626", marginTop: "0.4rem" }}>{promoError}</p>}
@@ -530,6 +703,10 @@ export default function CartPage() {
                       fontFamily: "var(--font-body)", fontSize: "0.82rem",
                       fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase",
                       transition: "background 0.3s ease",
+                    }}
+                    onClick={e => {
+                      if (requireAuth()) return;
+                      e.preventDefault();
                     }}
                     onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.background = "var(--copper)")}
                     onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.background = "var(--charcoal)")}>
@@ -644,7 +821,10 @@ export default function CartPage() {
                   }}>
                     <div style={{ aspectRatio: "4/3", position: "relative", overflow: "hidden" }}>
                       <Image src={getImageUrl(item.imageUrl || item.img)} alt={item.name} fill style={{ objectFit: "cover", transition: "transform 0.5s ease", transform: hoverRec === item.id ? "scale(1.04)" : "scale(1)" }} />
-                      <button onClick={e => e.preventDefault()}
+                      <button onClick={e => {
+                        e.preventDefault();
+                        void addRecommendationToCart(item);
+                      }}
                         style={{
                           position: "absolute", bottom: "0.75rem", left: "50%", transform: "translateX(-50%)",
                           background: "var(--cream)", border: "none", color: "var(--charcoal)",

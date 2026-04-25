@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { getCart, logout } from "../../services/api";
 
 interface User {
   name: string;
@@ -10,10 +12,18 @@ interface User {
 }
 
 export default function NavbarUser({ user }: { user: User }) {
+  const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [cartCount] = useState(2);
+  const [cartCount, setCartCount] = useState(0);
+
+  const handleLogout = async () => {
+    setProfileOpen(false);
+    setMenuOpen(false);
+    await logout();
+    router.push("/login");
+  };
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 40);
@@ -25,6 +35,17 @@ export default function NavbarUser({ user }: { user: User }) {
     document.body.style.overflow = menuOpen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [menuOpen]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadCartCount() {
+      const cart = await getCart();
+      if (active) setCartCount(cart.count);
+    }
+
+    void loadCartCount();
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const close = () => setProfileOpen(false);
@@ -170,6 +191,7 @@ export default function NavbarUser({ user }: { user: User }) {
                     ))}
                     <button id="logout-btn"
                       style={{ width: "100%", padding: "0.85rem 1.5rem", background: "none", border: "none", textAlign: "left", fontSize: "0.82rem", fontWeight: 500, color: "#C0392B", cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", gap: "0.5rem", transition: "background 0.2s ease" }}
+                      onClick={handleLogout}
                       onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = "rgba(192,57,43,0.06)")}
                       onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = "none")}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -363,6 +385,7 @@ export default function NavbarUser({ user }: { user: User }) {
               cursor: "pointer", display: "flex", alignItems: "center", gap: "0.6rem",
               transition: "background 0.15s ease",
             }}
+            onClick={handleLogout}
             onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = "rgba(192,57,43,0.05)")}
             onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = "none")}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
