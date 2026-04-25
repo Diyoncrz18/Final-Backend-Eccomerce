@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FAF8F5"/>
+      <stop offset="1" stop-color="#EDE5D4"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <line x1="60" y1="490" x2="740" y2="490" stroke="#D4CEC6" stroke-width="1"/>
+  <g stroke="#2A2620" stroke-width="2.5" fill="none" stroke-linecap="square">
+    <rect x="170" y="260" width="460" height="40"/>
+    <rect x="440" y="300" width="180" height="90"/>
+    <line x1="440" y1="345" x2="620" y2="345"/>
+    <line x1="195" y1="300" x2="195" y2="490"/>
+    <line x1="215" y1="300" x2="215" y2="490"/>
+    <line x1="395" y1="300" x2="395" y2="490"/>
+    <line x1="415" y1="300" x2="415" y2="490"/>
+  </g>
+  <g fill="#C4713A">
+    <circle cx="525" cy="322" r="4"/>
+    <circle cx="525" cy="367" r="4"/>
+  </g>
+  <g stroke="#2A2620" stroke-width="2" fill="none">
+    <rect x="230" y="150" width="150" height="110"/>
+    <path d="M 260 260 L 260 245 L 350 245 L 350 260"/>
+  </g>
+  <g fill="#2A2620" opacity="0.85">
+    <rect x="260" y="170" width="90" height="70"/>
+  </g>
+  <rect x="275" y="270" width="55" height="12" stroke="#2A2620" stroke-width="1.5" fill="none"/>
+</svg>

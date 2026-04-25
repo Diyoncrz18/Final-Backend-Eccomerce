@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FAF8F5"/>
+      <stop offset="1" stop-color="#EDE5D4"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <line x1="60" y1="510" x2="740" y2="510" stroke="#D4CEC6" stroke-width="1"/>
+  <g stroke="#2A2620" stroke-width="2.5" fill="none" stroke-linecap="square">
+    <rect x="320" y="100" width="160" height="400"/>
+    <line x1="320" y1="200" x2="480" y2="200"/>
+    <line x1="320" y1="300" x2="480" y2="300"/>
+    <line x1="320" y1="400" x2="480" y2="400"/>
+    <line x1="340" y1="500" x2="340" y2="515"/>
+    <line x1="460" y1="500" x2="460" y2="515"/>
+  </g>
+  <g fill="#C4713A">
+    <rect x="395" y="140" width="10" height="25"/>
+    <rect x="395" y="240" width="10" height="25"/>
+    <rect x="395" y="340" width="10" height="25"/>
+    <rect x="395" y="440" width="10" height="25"/>
+  </g>
+  <g stroke="#2A2620" stroke-width="1" fill="none" opacity="0.5">
+    <path d="M 340 160 Q 350 150 365 155 Q 380 158 390 155"/>
+    <path d="M 410 160 Q 420 150 435 155 Q 450 158 460 155"/>
+    <path d="M 340 260 Q 350 250 365 255 Q 380 258 390 255"/>
+    <path d="M 410 260 Q 420 250 435 255 Q 450 258 460 255"/>
+    <path d="M 340 360 Q 350 350 365 355 Q 380 358 390 355"/>
+    <path d="M 410 360 Q 420 350 435 355 Q 450 358 460 355"/>
+  </g>
+</svg>

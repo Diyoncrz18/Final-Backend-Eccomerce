@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FAF8F5"/>
+      <stop offset="1" stop-color="#EDE5D4"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <line x1="60" y1="490" x2="740" y2="490" stroke="#D4CEC6" stroke-width="1"/>
+  <g stroke="#2A2620" stroke-width="2.5" fill="none" stroke-linecap="square">
+    <rect x="260" y="110" width="280" height="170"/>
+    <line x1="370" y1="280" x2="430" y2="280"/>
+    <line x1="390" y1="280" x2="410" y2="300"/>
+    <line x1="360" y1="300" x2="440" y2="300"/>
+    <rect x="140" y="310" width="520" height="150"/>
+    <line x1="300" y1="310" x2="300" y2="460"/>
+    <line x1="500" y1="310" x2="500" y2="460"/>
+    <line x1="140" y1="385" x2="660" y2="385"/>
+    <line x1="160" y1="460" x2="160" y2="490"/>
+    <line x1="640" y1="460" x2="640" y2="490"/>
+  </g>
+  <rect x="275" y="125" width="250" height="140" fill="#2A2620" opacity="0.85"/>
+  <g fill="#C4713A">
+    <circle cx="220" cy="345" r="3.5"/>
+    <circle cx="220" cy="425" r="3.5"/>
+    <circle cx="400" cy="345" r="3.5"/>
+    <circle cx="400" cy="425" r="3.5"/>
+    <circle cx="580" cy="345" r="3.5"/>
+    <circle cx="580" cy="425" r="3.5"/>
+  </g>
+</svg>

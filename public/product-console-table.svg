@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FAF8F5"/>
+      <stop offset="1" stop-color="#EDE5D4"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FAF8F5" stop-opacity="0.4"/>
+      <stop offset="0.5" stop-color="#D4CEC6" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#FAF8F5" stop-opacity="0.4"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <line x1="60" y1="500" x2="740" y2="500" stroke="#D4CEC6" stroke-width="1"/>
+  <g stroke="#C4713A" stroke-width="3" fill="url(#glass)">
+    <rect x="160" y="300" width="480" height="16"/>
+  </g>
+  <g stroke="#C4713A" stroke-width="3" fill="none">
+    <line x1="190" y1="316" x2="190" y2="500"/>
+    <line x1="610" y1="316" x2="610" y2="500"/>
+    <line x1="400" y1="316" x2="400" y2="500" opacity="0.6"/>
+    <line x1="160" y1="500" x2="640" y2="500"/>
+    <line x1="190" y1="410" x2="610" y2="410"/>
+  </g>
+  <g stroke="#C4713A" stroke-width="2" fill="url(#glass)">
+    <rect x="190" y="398" width="420" height="14"/>
+  </g>
+  <!-- Decor on top -->
+  <g stroke="#2A2620" stroke-width="2" fill="#2A2620" opacity="0.85">
+    <rect x="270" y="230" width="30" height="70"/>
+    <ellipse cx="285" cy="230" rx="20" ry="6"/>
+  </g>
+  <g fill="#C4713A" opacity="0.9">
+    <circle cx="420" cy="275" r="22"/>
+    <rect x="500" y="240" width="48" height="60"/>
+  </g>
+</svg>

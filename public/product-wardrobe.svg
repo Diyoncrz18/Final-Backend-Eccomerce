@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FAF8F5"/>
+      <stop offset="1" stop-color="#EDE5D4"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <line x1="60" y1="520" x2="740" y2="520" stroke="#D4CEC6" stroke-width="1"/>
+  <g stroke="#2A2620" stroke-width="2.5" fill="none" stroke-linecap="square">
+    <rect x="240" y="90" width="320" height="420"/>
+    <line x1="346" y1="90" x2="346" y2="510"/>
+    <line x1="453" y1="90" x2="453" y2="510"/>
+    <line x1="240" y1="180" x2="560" y2="180"/>
+  </g>
+  <g fill="#C4713A">
+    <rect x="336" y="290" width="4" height="36"/>
+    <rect x="459" y="290" width="4" height="36"/>
+    <circle cx="338" cy="308" r="5"/>
+    <circle cx="461" cy="308" r="5"/>
+    <rect x="397" y="290" width="4" height="36"/>
+    <circle cx="399" cy="308" r="5"/>
+  </g>
+  <g stroke="#2A2620" stroke-width="1.5" fill="none" opacity="0.6">
+    <line x1="260" y1="220" x2="330" y2="220"/>
+    <line x1="260" y1="250" x2="330" y2="250"/>
+    <line x1="470" y1="220" x2="540" y2="220"/>
+    <line x1="470" y1="250" x2="540" y2="250"/>
+  </g>
+</svg>

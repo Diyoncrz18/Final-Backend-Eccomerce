@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FAF8F5"/>
+      <stop offset="1" stop-color="#EDE5D4"/>
+    </linearGradient>
+    <radialGradient id="flame" cx="0.5" cy="0.5">
+      <stop offset="0" stop-color="#FFE0A0"/>
+      <stop offset="1" stop-color="#C4713A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <line x1="60" y1="480" x2="740" y2="480" stroke="#D4CEC6" stroke-width="1"/>
+  <!-- Tall candle -->
+  <g>
+    <rect x="250" y="200" width="80" height="280" fill="#EDE5D4" stroke="#2A2620" stroke-width="2"/>
+    <ellipse cx="290" cy="200" rx="40" ry="6" fill="#FAF8F5" stroke="#2A2620" stroke-width="2"/>
+    <line x1="290" y1="180" x2="290" y2="200" stroke="#2A2620" stroke-width="2"/>
+    <circle cx="290" cy="165" r="22" fill="url(#flame)"/>
+    <path d="M 290 145 Q 285 160 290 175 Q 295 160 290 145" fill="#C4713A"/>
+  </g>
+  <!-- Medium candle -->
+  <g>
+    <rect x="360" y="270" width="80" height="210" fill="#D4CEC6" stroke="#2A2620" stroke-width="2"/>
+    <ellipse cx="400" cy="270" rx="40" ry="6" fill="#FAF8F5" stroke="#2A2620" stroke-width="2"/>
+    <line x1="400" y1="252" x2="400" y2="270" stroke="#2A2620" stroke-width="2"/>
+    <circle cx="400" cy="238" r="18" fill="url(#flame)"/>
+    <path d="M 400 222 Q 396 234 400 246 Q 404 234 400 222" fill="#C4713A"/>
+  </g>
+  <!-- Short candle -->
+  <g>
+    <rect x="470" y="340" width="80" height="140" fill="#EDE5D4" stroke="#2A2620" stroke-width="2"/>
+    <ellipse cx="510" cy="340" rx="40" ry="6" fill="#FAF8F5" stroke="#2A2620" stroke-width="2"/>
+    <line x1="510" y1="324" x2="510" y2="340" stroke="#2A2620" stroke-width="2"/>
+    <circle cx="510" cy="312" r="14" fill="url(#flame)"/>
+    <path d="M 510 300 Q 506 310 510 320 Q 514 310 510 300" fill="#C4713A"/>
+  </g>
+</svg>

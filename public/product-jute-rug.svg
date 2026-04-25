@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FAF8F5"/>
+      <stop offset="1" stop-color="#EDE5D4"/>
+    </linearGradient>
+    <pattern id="jute" width="12" height="12" patternUnits="userSpaceOnUse">
+      <rect width="12" height="12" fill="#D4895A"/>
+      <path d="M 0 6 L 12 6" stroke="#A85D28" stroke-width="1.5"/>
+      <path d="M 6 0 L 6 12" stroke="#A85D28" stroke-width="1.5"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <g transform="translate(400,340) skewX(-18) translate(-400,-340)">
+    <rect x="150" y="190" width="500" height="300" fill="url(#jute)" stroke="#2A2620" stroke-width="2"/>
+    <g stroke="#2A2620" stroke-width="1" opacity="0.35" fill="none">
+      <line x1="150" y1="250" x2="650" y2="250"/>
+      <line x1="150" y1="310" x2="650" y2="310"/>
+      <line x1="150" y1="370" x2="650" y2="370"/>
+      <line x1="150" y1="430" x2="650" y2="430"/>
+      <line x1="280" y1="190" x2="280" y2="490"/>
+      <line x1="400" y1="190" x2="400" y2="490"/>
+      <line x1="520" y1="190" x2="520" y2="490"/>
+    </g>
+  </g>
+  <g stroke="#C4713A" stroke-width="1.5" fill="none" opacity="0.8">
+    <path d="M 110 180 L 100 175 M 110 190 L 100 190 M 110 200 L 100 205"/>
+    <path d="M 570 490 L 580 495 M 570 500 L 580 500"/>
+  </g>
+</svg>
