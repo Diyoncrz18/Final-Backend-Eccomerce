@@ -1,7 +1,10 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { getAdminDisplayName, isAdmin, isAuthenticated, logout } from "../../services/api";
+
+const isBrowser = typeof window !== "undefined";
 
 /* ─── Nav Config ─── */
 const NAV_GROUPS = [
@@ -35,26 +38,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [isAuthed, setIsAuthed] = useState(false);
-  const [adminName, setAdminName] = useState("Admin Maison");
 
   const isLoginPage = pathname === "/admin/login";
+  const authChecked = isBrowser;
+  const isAuthed = isBrowser && isAuthenticated() && isAdmin();
+  const adminName = isBrowser ? getAdminDisplayName() : "Admin Maison";
 
   const isActive = (href: string, exact: boolean) =>
     exact ? pathname === href : pathname.startsWith(href);
 
-  /* ── Auth Guard ── */
-  useEffect(() => {
-    const auth = localStorage.getItem("maison_admin_auth") === "true";
-    const name = localStorage.getItem("maison_admin_name") ?? "Admin Maison";
-    setIsAuthed(auth);
-    setAdminName(name);
-    setAuthChecked(true);
-    if (!auth && !isLoginPage) {
-      router.replace("/admin/login");
-    }
-  }, [pathname, isLoginPage, router]);
+  if (isBrowser && !isLoginPage && !isAuthed) {
+    router.replace("/admin/login");
+    return null;
+  }
 
   /* ── Login page — bare layout ── */
   if (isLoginPage) {
@@ -83,9 +79,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   /* ── Not authenticated — return nothing (redirecting) ── */
   if (!isAuthed) return null;
 
-  const handleLogout = () => {
-    localStorage.removeItem("maison_admin_auth");
-    localStorage.removeItem("maison_admin_name");
+  const handleLogout = async () => {
+    await logout();
     router.replace("/admin/login");
   };
 

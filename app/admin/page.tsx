@@ -1,35 +1,103 @@
 "use client";
-import { AdminTopbar, AdminPageHeader, AdminStatCard, AdminTable, AdminTr, AdminTd, AdminBtn, OrderStatusBadge, formatRp } from "./components";
 
-/* ─── Mock Data ─── */
-const RECENT_ORDERS = [
-  { id: "MSN-20250418-001", customer: "Budi Santoso", items: "Bouclé Armchair + Marble Side Table", total: 9760000, status: "dikirim", date: "18 Apr 2025" },
-  { id: "MSN-20250415-002", customer: "Anisa Rahma", items: "Olive Linen Sofa", total: 12500000, status: "dikemas", date: "15 Apr 2025" },
-  { id: "MSN-20250408-003", customer: "Reza Fauzi", items: "Ceramic Vase (2×) + Rattan Panel", total: 4800000, status: "selesai", date: "8 Apr 2025" },
-  { id: "MSN-20250328-004", customer: "Dewi Sartika", items: "Oak Dining Table", total: 9800000, status: "selesai", date: "28 Mar 2025" },
-  { id: "MSN-20250312-005", customer: "Citra Wulandari", items: "Velvet Accent Chair", total: 5040000, status: "dibatalkan", date: "12 Mar 2025" },
-];
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  AdminTopbar,
+  AdminPageHeader,
+  AdminStatCard,
+  AdminTable,
+  AdminTr,
+  AdminTd,
+  AdminBtn,
+  OrderStatusBadge,
+  formatRp,
+} from "./components";
+import { AdminUser, fetchAdminOrders, fetchAdminUsers, fetchProducts } from "../../services/api";
 
-const LOW_STOCK = [
-  { name: "Oak Dining Table", sku: "MSN-TABLE-005", stock: 2, cat: "Meja" },
-  { name: "Marble Side Table", sku: "MSN-TABLE-004", stock: 3, cat: "Meja" },
-  { name: "Olive Linen Sofa", sku: "MSN-SOFA-002", stock: 3, cat: "Kursi" },
-];
+type AdminOrder = {
+  id: number;
+  orderNumber: string;
+  customer: string;
+  email: string;
+  items: string;
+  total: number;
+  status: string;
+  createdAt: string;
+  createdDate: Date | null;
+};
 
-const DAILY_SALES = [32, 48, 41, 67, 58, 82, 74, 91, 65, 78, 84, 96, 70, 88];
+type AdminProduct = {
+  id: number;
+  sku: string;
+  name: string;
+  category: string;
+  stock: number;
+  isActive: boolean;
+};
+
+const TIER_COLORS: Record<string, string> = {
+  REGULAR: "#8A8078",
+  GOLD: "#C4713A",
+  PLATINUM: "#1A1714",
+};
 
 export default function AdminDashboard() {
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [products, setProducts] = useState<AdminProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadDashboard() {
+      setLoading(true);
+      const [ordersData, usersData, productsData] = await Promise.all([
+        fetchAdminOrders(0, 100),
+        fetchAdminUsers(0, 100),
+        fetchProducts(0, 100),
+      ]);
+
+      setOrders(ordersData.map(normalizeOrder));
+      setUsers(usersData);
+      setProducts(productsData.map(normalizeProduct));
+      setLoading(false);
+    }
+
+    loadDashboard();
+  }, []);
+
+  const activeProducts = products.filter((product) => product.isActive);
+  const activeMembers = users.filter((user) => user.isActive && !user.roles.includes("ROLE_ADMIN"));
+  const pendingOrders = orders.filter((order) => order.status === "menunggu");
+  const lowStock = activeProducts
+    .filter((product) => product.stock <= 5)
+    .sort((a, b) => a.stock - b.stock)
+    .slice(0, 5);
+
+  const totalRevenue = orders
+    .filter((order) => order.status !== "dibatalkan")
+    .reduce((sum, order) => sum + order.total, 0);
+
+  const recentOrders = [...orders]
+    .sort((a, b) => (b.createdDate?.getTime() ?? 0) - (a.createdDate?.getTime() ?? 0))
+    .slice(0, 5);
+
+  const salesTrend = useMemo(() => buildSalesTrend(orders), [orders]);
+  const tierDistribution = useMemo(() => buildTierDistribution(activeMembers), [activeMembers]);
+
   return (
     <>
       <AdminTopbar
         breadcrumb={[{ label: "Admin" }, { label: "Overview" }]}
         action={
-          <AdminBtn variant="primary">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Tambah Produk
-          </AdminBtn>
+          <Link href="/admin/produk/tambah" style={{ textDecoration: "none" }}>
+            <AdminBtn variant="primary">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Tambah Produk
+            </AdminBtn>
+          </Link>
         }
       />
 
@@ -37,57 +105,44 @@ export default function AdminDashboard() {
         <AdminPageHeader
           tag={`Data per ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`}
           title="Dashboard Penjualan"
-          subtitle="Ringkasan performa toko Maison secara real-time"
+          subtitle={loading ? "Memuat data dari database..." : "Ringkasan performa toko Maison dari database"}
         />
 
-        {/* ── Stats ── */}
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: "1rem",
-            marginBottom: "2rem",
-          }}
+          style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "2rem" }}
           className="admin-stats-grid"
         >
           <AdminStatCard
-            label="Pendapatan Bulan Ini"
-            value="84,2 jt"
-            sub="↑ +12.4% dari bulan lalu"
+            label="Pendapatan Tercatat"
+            value={formatShortCurrency(totalRevenue)}
+            sub={`${orders.length} pesanan dari database`}
             icon={<RevIcon />}
           />
           <AdminStatCard
             label="Total Pesanan"
-            value="247"
-            sub="8 perlu diproses"
+            value={orders.length.toLocaleString("id-ID")}
+            sub={`${pendingOrders.length} perlu diproses`}
             icon={<OrdIcon />}
           />
           <AdminStatCard
             label="Member Aktif"
-            value="1.842"
-            sub="↑ 38 minggu ini"
+            value={activeMembers.length.toLocaleString("id-ID")}
+            sub={`${users.length} akun tercatat`}
             icon={<UsrIcon />}
           />
           <AdminStatCard
             label="Produk Aktif"
-            value="52"
-            sub="3 stok hampir habis"
-            subColor="#DC2626"
+            value={activeProducts.length.toLocaleString("id-ID")}
+            sub={`${lowStock.length} stok hampir habis`}
+            subColor={lowStock.length > 0 ? "#DC2626" : "#16A34A"}
             icon={<ProdIcon />}
           />
         </div>
 
-        {/* ── Charts + Low Stock ── */}
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 340px",
-            gap: "1rem",
-            marginBottom: "2rem",
-          }}
+          style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "1rem", marginBottom: "2rem" }}
           className="admin-chart-grid"
         >
-          {/* Bar Chart */}
           <div style={{ background: "#FAF8F5", border: "1px solid #E4DDD3", padding: "1.5rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
               <div>
@@ -98,48 +153,30 @@ export default function AdminDashboard() {
                   14 Hari Terakhir
                 </div>
               </div>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                {["7H", "14H", "30H"].map((t, i) => (
-                  <button key={t} style={{
-                    padding: "0.3rem 0.7rem",
-                    fontSize: "0.68rem",
-                    background: i === 1 ? "#1A1714" : "transparent",
-                    color: i === 1 ? "#FAF8F5" : "#8A8078",
-                    border: "1px solid #E4DDD3",
-                    cursor: "pointer",
-                    fontFamily: "var(--font-body)",
-                  }}>{t}</button>
-                ))}
+              <div style={{ fontSize: "0.72rem", color: "#8A8078", textAlign: "right" }}>
+                Total {formatRp(salesTrend.reduce((sum, item) => sum + item.total, 0))}
               </div>
             </div>
-            {/* Bar chart visual */}
+
             <div style={{ display: "flex", alignItems: "flex-end", gap: "6px", height: "120px" }}>
-              {DAILY_SALES.map((v, i) => {
-                const max = Math.max(...DAILY_SALES);
-                const pct = (v / max) * 100;
-                const isLast = i === DAILY_SALES.length - 1;
+              {salesTrend.map((item, index) => {
+                const max = Math.max(1, ...salesTrend.map((day) => day.total));
+                const pct = item.total > 0 ? (item.total / max) * 100 : 4;
+                const isLast = index === salesTrend.length - 1;
                 return (
-                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                  <div key={item.key} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
                     {isLast && (
-                      <div style={{
-                        fontSize: "0.55rem",
-                        color: "#C4713A",
-                        background: "rgba(196,113,58,0.1)",
-                        padding: "0.1rem 0.35rem",
-                        whiteSpace: "nowrap",
-                      }}>
-                        84,2 jt
+                      <div style={{ fontSize: "0.55rem", color: "#C4713A", background: "rgba(196,113,58,0.1)", padding: "0.1rem 0.35rem", whiteSpace: "nowrap" }}>
+                        {formatShortCurrency(item.total)}
                       </div>
                     )}
                     <div
-                      title={`${v} jt`}
+                      title={formatRp(item.total)}
                       style={{
                         width: "100%",
                         height: `${pct}%`,
                         background: isLast ? "#C4713A" : "rgba(196,113,58,0.25)",
                         borderRadius: "1px 1px 0 0",
-                        transition: "background 0.2s",
-                        cursor: "pointer",
                         minHeight: "4px",
                       }}
                     />
@@ -147,23 +184,17 @@ export default function AdminDashboard() {
                 );
               })}
             </div>
-            {/* X labels */}
             <div style={{ display: "flex", gap: "6px", marginTop: "0.5rem" }}>
-              {["7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"].map((d) => (
-                <div key={d} style={{ flex: 1, fontSize: "0.5rem", color: "#B8AFA0", textAlign: "center" }}>Apr {d}</div>
+              {salesTrend.map((item) => (
+                <div key={item.key} style={{ flex: 1, fontSize: "0.5rem", color: "#B8AFA0", textAlign: "center" }}>
+                  {item.label}
+                </div>
               ))}
             </div>
           </div>
 
-          {/* Low Stock Alert */}
           <div style={{ background: "#FAF8F5", border: "1px solid #E4DDD3", overflow: "hidden" }}>
-            <div style={{
-              padding: "1rem 1.25rem",
-              borderBottom: "1px solid #E4DDD3",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}>
+            <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid #E4DDD3", display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2">
                 <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
                 <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
@@ -172,99 +203,103 @@ export default function AdminDashboard() {
                 Stok Hampir Habis
               </span>
               <span style={{ fontSize: "0.62rem", background: "rgba(220,38,38,0.1)", color: "#DC2626", padding: "0.15rem 0.55rem", fontWeight: 600 }}>
-                {LOW_STOCK.length} Produk
+                {lowStock.length} Produk
               </span>
             </div>
-            {LOW_STOCK.map((p) => (
-              <div
-                key={p.sku}
-                style={{
-                  padding: "1rem 1.25rem",
-                  borderBottom: "1px solid rgba(228,221,211,0.5)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.75rem",
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "0.82rem", color: "#1A1714", fontWeight: 500, marginBottom: "0.15rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {p.name}
-                  </div>
-                  <div style={{ fontSize: "0.65rem", color: "#B8AFA0" }}>{p.sku} · {p.cat}</div>
-                  {/* Progress */}
-                  <div style={{ height: "3px", background: "rgba(220,38,38,0.1)", marginTop: "0.5rem", borderRadius: "2px" }}>
-                    <div style={{ height: "100%", width: `${(p.stock / 20) * 100}%`, background: "#DC2626", borderRadius: "2px" }} />
-                  </div>
-                </div>
-                <span style={{ fontSize: "1.2rem", fontFamily: "var(--font-display)", fontWeight: 300, color: "#DC2626", flexShrink: 0 }}>
-                  {p.stock}
-                </span>
+            {lowStock.length === 0 ? (
+              <div style={{ padding: "2rem 1.25rem", color: "#8A8078", fontSize: "0.8rem" }}>
+                Tidak ada produk aktif dengan stok rendah.
               </div>
-            ))}
+            ) : (
+              lowStock.map((product) => (
+                <div key={product.id} style={{ padding: "1rem 1.25rem", borderBottom: "1px solid rgba(228,221,211,0.5)", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "0.82rem", color: "#1A1714", fontWeight: 500, marginBottom: "0.15rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {product.name}
+                    </div>
+                    <div style={{ fontSize: "0.65rem", color: "#B8AFA0" }}>{product.sku} - {product.category}</div>
+                    <div style={{ height: "3px", background: "rgba(220,38,38,0.1)", marginTop: "0.5rem", borderRadius: "2px" }}>
+                      <div style={{ height: "100%", width: `${Math.min(100, (product.stock / 20) * 100)}%`, background: "#DC2626", borderRadius: "2px" }} />
+                    </div>
+                  </div>
+                  <span style={{ fontSize: "1.2rem", fontFamily: "var(--font-display)", fontWeight: 300, color: "#DC2626", flexShrink: 0 }}>
+                    {product.stock}
+                  </span>
+                </div>
+              ))
+            )}
             <div style={{ padding: "0.85rem 1.25rem" }}>
-              <AdminBtn variant="ghost" size="sm">
-                Lihat Semua Produk →
-              </AdminBtn>
+              <Link href="/admin/produk" style={{ textDecoration: "none" }}>
+                <AdminBtn variant="ghost" size="sm">Lihat Semua Produk</AdminBtn>
+              </Link>
             </div>
           </div>
         </div>
 
-        {/* ── Tier Distribution ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", marginBottom: "2rem" }}>
-          {[
-            { tier: "Regular", count: 1204, pct: 65, color: "#8A8078" },
-            { tier: "Gold", count: 520, pct: 28, color: "#C4713A" },
-            { tier: "Platinum", count: 118, pct: 7, color: "#1A1714" },
-          ].map((t) => (
-            <div key={t.tier} style={{ background: "#FAF8F5", border: "1px solid #E4DDD3", padding: "1.25rem 1.5rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", marginBottom: "2rem" }} className="admin-tier-grid">
+          {tierDistribution.map((tier) => (
+            <div key={tier.key} style={{ background: "#FAF8F5", border: "1px solid #E4DDD3", padding: "1.25rem 1.5rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
                 <span style={{ fontSize: "0.72rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "#8A8078" }}>
-                  {t.tier}
+                  {tier.label}
                 </span>
-                <span style={{ fontSize: "0.65rem", color: t.color, fontWeight: 600 }}>{t.pct}%</span>
+                <span style={{ fontSize: "0.65rem", color: tier.color, fontWeight: 600 }}>{tier.pct}%</span>
               </div>
               <div style={{ fontFamily: "var(--font-display)", fontSize: "1.6rem", fontWeight: 300, color: "#1A1714", marginBottom: "0.75rem" }}>
-                {t.count.toLocaleString("id-ID")}
+                {tier.count.toLocaleString("id-ID")}
               </div>
               <div style={{ height: "4px", background: "rgba(228,221,211,0.8)", borderRadius: "2px" }}>
-                <div style={{ height: "100%", width: `${t.pct}%`, background: t.color, borderRadius: "2px", transition: "width 0.5s ease" }} />
+                <div style={{ height: "100%", width: `${tier.pct}%`, background: tier.color, borderRadius: "2px", transition: "width 0.5s ease" }} />
               </div>
             </div>
           ))}
         </div>
 
-        {/* ── Recent Orders ── */}
         <AdminTable
           title="Pesanan Terbaru"
           columns={["No. Pesanan", "Pelanggan", "Produk", "Total", "Tanggal", "Status", ""]}
           action={
-            <AdminBtn variant="ghost" size="sm">
-              Lihat Semua Pesanan →
-            </AdminBtn>
+            <Link href="/admin/pesanan" style={{ textDecoration: "none" }}>
+              <AdminBtn variant="ghost" size="sm">Lihat Semua Pesanan</AdminBtn>
+            </Link>
           }
         >
-          {RECENT_ORDERS.map((o) => (
-            <AdminTr key={o.id}>
-              <AdminTd bold>{o.id}</AdminTd>
-              <AdminTd>{o.customer}</AdminTd>
-              <AdminTd muted>{o.items}</AdminTd>
-              <AdminTd bold>{formatRp(o.total)}</AdminTd>
-              <AdminTd muted>{o.date}</AdminTd>
-              <AdminTd><OrderStatusBadge status={o.status} /></AdminTd>
-              <AdminTd>
-                <AdminBtn variant="ghost" size="sm">Detail</AdminBtn>
-              </AdminTd>
-            </AdminTr>
-          ))}
+          {recentOrders.length === 0 ? (
+            <tr>
+              <td colSpan={7} style={{ padding: "3rem", textAlign: "center", color: "#8A8078", fontSize: "0.85rem" }}>
+                Belum ada pesanan di database.
+              </td>
+            </tr>
+          ) : (
+            recentOrders.map((order) => (
+              <AdminTr key={order.id}>
+                <AdminTd bold>{order.orderNumber}</AdminTd>
+                <AdminTd>{order.customer}</AdminTd>
+                <AdminTd muted>{order.items}</AdminTd>
+                <AdminTd bold>{formatRp(order.total)}</AdminTd>
+                <AdminTd muted>{order.createdAt}</AdminTd>
+                <AdminTd><OrderStatusBadge status={order.status} /></AdminTd>
+                <AdminTd>
+                  <Link href="/admin/pesanan" style={{ textDecoration: "none" }}>
+                    <AdminBtn variant="ghost" size="sm">Detail</AdminBtn>
+                  </Link>
+                </AdminTd>
+              </AdminTr>
+            ))
+          )}
         </AdminTable>
       </div>
 
       <style jsx global>{`
         .admin-stats-grid { grid-template-columns: repeat(4, 1fr); }
         .admin-chart-grid { grid-template-columns: 1fr 340px; }
+        .admin-tier-grid { grid-template-columns: repeat(3, 1fr); }
         @media (max-width: 1200px) {
           .admin-stats-grid { grid-template-columns: repeat(2, 1fr); }
           .admin-chart-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 760px) {
+          .admin-tier-grid { grid-template-columns: 1fr; }
         }
         @media (max-width: 640px) {
           .admin-stats-grid { grid-template-columns: 1fr; }
@@ -272,6 +307,114 @@ export default function AdminDashboard() {
       `}</style>
     </>
   );
+}
+
+function normalizeOrder(value: unknown): AdminOrder {
+  const order = asRecord(value);
+  const user = asRecord(order.user);
+  const createdDate = parseDate(order.createdAt);
+
+  return {
+    id: toNumber(order.id),
+    orderNumber: toText(order.orderNumber, `ORD-${toNumber(order.id)}`),
+    customer: toText(user.fullName ?? order.customerName ?? order.customer, "Pelanggan"),
+    email: toText(user.email ?? order.userEmail, "-"),
+    items: summarizeOrderItems(order.orderItems),
+    total: toNumber(order.total),
+    status: toText(order.status, "MENUNGGU").toLowerCase(),
+    createdAt: createdDate ? createdDate.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "-",
+    createdDate,
+  };
+}
+
+function normalizeProduct(value: unknown): AdminProduct {
+  const product = asRecord(value);
+  const category = asRecord(product.category);
+
+  return {
+    id: toNumber(product.id),
+    sku: toText(product.sku, `PRD-${toNumber(product.id)}`),
+    name: toText(product.name, "Produk"),
+    category: toText(category.name ?? product.category, "Tanpa kategori"),
+    stock: toNumber(product.stock),
+    isActive: product.isActive !== false,
+  };
+}
+
+function summarizeOrderItems(value: unknown) {
+  if (!Array.isArray(value) || value.length === 0) return "-";
+
+  return value
+    .map((entry) => {
+      const item = asRecord(entry);
+      const product = asRecord(item.product);
+      const name = toText(product.name, "Produk");
+      const quantity = toNumber(item.quantity);
+      return quantity > 1 ? `${name} (${quantity}x)` : name;
+    })
+    .join(", ");
+}
+
+function buildSalesTrend(orders: AdminOrder[]) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: 14 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (13 - index));
+    const key = date.toISOString().slice(0, 10);
+    const total = orders
+      .filter((order) => order.createdDate && order.createdDate.toISOString().slice(0, 10) === key && order.status !== "dibatalkan")
+      .reduce((sum, order) => sum + order.total, 0);
+
+    return {
+      key,
+      label: date.toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+      total,
+    };
+  });
+}
+
+function buildTierDistribution(users: AdminUser[]) {
+  const total = Math.max(1, users.length);
+  return ["REGULAR", "GOLD", "PLATINUM"].map((tier) => {
+    const count = users.filter((user) => user.tier === tier).length;
+    return {
+      key: tier,
+      label: tier.charAt(0) + tier.slice(1).toLowerCase(),
+      count,
+      pct: Math.round((count / total) * 100),
+      color: TIER_COLORS[tier],
+    };
+  });
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+}
+
+function toText(value: unknown, fallback = "") {
+  if (value === null || value === undefined || value === "") return fallback;
+  return String(value);
+}
+
+function toNumber(value: unknown) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function parseDate(value: unknown) {
+  if (!value) return null;
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatShortCurrency(value: number) {
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`;
+  }
+
+  return formatRp(value);
 }
 
 function RevIcon() {

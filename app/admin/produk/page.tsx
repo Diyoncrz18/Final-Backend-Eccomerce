@@ -2,17 +2,14 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { AdminTopbar, AdminPageHeader, AdminTable, AdminTr, AdminTd, AdminBtn, AdminSearch, formatRp } from "../components";
-import { fetchProducts, getAuthToken } from "../../../services/api";
+import { fetchProducts } from "../../../services/api";
 
 /* ─── Types ─── */
 interface Product {
-  id: number; sku: string; name: string; category: any; collection: any;
+  id: number; sku: string; name: string; category: string; collection: string;
   price: number; salePrice: number | null; stock: number;
   isActive: boolean; isNew: boolean; imageUrl: string; rating: number;
 }
-
-/* ─── Categories from mock ─── */
-const CATEGORIES = ["semua", "Kursi", "Meja", "Lampu", "Dekorasi", "Penyimpananan"];
 
 export default function AdminProdukPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -49,6 +46,7 @@ export default function AdminProdukPage() {
   }, []);
 
   const activeProducts = products.filter(p => p.isActive);
+  const categories = ["semua", ...Array.from(new Set(products.map((p) => p.category).filter(Boolean)))];
   const filtered = products.filter((p: Product) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase());
     const matchCat = activeCategory === "semua" || p.category === activeCategory;
@@ -83,7 +81,7 @@ export default function AdminProdukPage() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1.5rem" }}>
           {/* Category tabs */}
           <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #E4DDD3", flexWrap: "wrap" }}>
-            {CATEGORIES.map((cat) => (
+            {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
@@ -136,7 +134,13 @@ export default function AdminProdukPage() {
         <AdminTable
           columns={["Produk", "SKU", "Kategori", "Harga", "Stok", "Status", "Rating", ""]}
         >
-          {filtered.length === 0 ? (
+          {loading ? (
+            <tr>
+              <td colSpan={8} style={{ padding: "3rem", textAlign: "center", color: "#B8AFA0", fontSize: "0.85rem" }}>
+                Memuat data produk dari database...
+              </td>
+            </tr>
+          ) : filtered.length === 0 ? (
             <tr>
               <td colSpan={8} style={{ padding: "3rem", textAlign: "center", color: "#B8AFA0", fontSize: "0.85rem" }}>
                 Tidak ada produk ditemukan

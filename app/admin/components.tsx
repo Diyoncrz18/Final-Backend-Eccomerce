@@ -324,12 +324,14 @@ export function AdminBtn({
   variant = "primary",
   size = "md",
   type = "button",
+  disabled = false,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   variant?: "primary" | "outline" | "ghost" | "danger";
   size?: "sm" | "md";
   type?: "button" | "submit";
+  disabled?: boolean;
 }) {
   const styles: Record<string, React.CSSProperties> = {
     primary: { background: "#C4713A", border: "1px solid #C4713A", color: "#fff" },
@@ -342,6 +344,7 @@ export function AdminBtn({
     <button
       type={type}
       onClick={onClick}
+      disabled={disabled}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -351,7 +354,8 @@ export function AdminBtn({
         fontSize: size === "sm" ? "0.7rem" : "0.78rem",
         fontWeight: 500,
         letterSpacing: "0.08em",
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.55 : 1,
         transition: "all 0.2s ease",
         whiteSpace: "nowrap",
         ...styles[variant],
