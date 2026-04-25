@@ -1,121 +1,42 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { sendChatMessage, type ChatProduct, type ChatMessageDTO } from "@/services/api";
 
 /* ──────────────────────────────────────
-   PRODUCT CATALOG (Mock — ganti dengan API nanti)
+   UI product shape (mapped from backend ChatProduct)
 ──────────────────────────────────────── */
-const PRODUCTS = [
-  { id: 1, name: "Bouclé Armchair", category: "Kursi", price: 6400000, img: "/product-chair.png", href: "/product/1", keywords: ["kursi", "chair", "duduk", "ruang tamu", "santai", "bouclé", "tekstur"] },
-  { id: 2, name: "Olive Linen Sofa", category: "Kursi", price: 12500000, img: "/product-sofa.png", href: "/product/2", keywords: ["sofa", "kursi panjang", "ruang tamu", "linen", "keluarga", "kumpul"] },
-  { id: 3, name: "Velvet Accent Chair", category: "Kursi", price: 5040000, img: "/product-velvet-chair.png", href: "/product/3", keywords: ["kursi", "beludru", "velvet", "aksen", "pojok", "kamar"] },
-  { id: 4, name: "Marble Side Table", category: "Meja", price: 3360000, img: "/product-marble-table.png", href: "/product/4", keywords: ["meja", "marmer", "samping", "sudut", "dekorasi", "mewah"] },
-  { id: 5, name: "Oak Dining Table", category: "Meja", price: 9800000, img: "/product-table.png", href: "/product/5", keywords: ["meja makan", "kayu", "oak", "dining", "keluarga", "makan"] },
-  { id: 6, name: "Rattan Pendant Lamp", category: "Lampu", price: 2750000, img: "/product-lamp.png", href: "/product/7", keywords: ["lampu", "rotan", "gantung", "pendant", "anyaman", "alami"] },
-  { id: 7, name: "Japandi Floor Lamp", category: "Lampu", price: 1850000, img: "/product-lamp.png", href: "/product/8", keywords: ["lampu", "lantai", "japandi", "minimalis", "sudut", "kamar"] },
-  { id: 8, name: "Ceramic Statement Vase", category: "Dekorasi", price: 945000, img: "/product-ceramic-vase.png", href: "/product/9", keywords: ["vas", "keramik", "dekorasi", "bunga", "meja", "cantik"] },
-  { id: 9, name: "Rattan Wall Panel", category: "Dekorasi", price: 1470000, img: "/product-rattan-wall.png", href: "/product/11", keywords: ["panel", "rotan", "dinding", "wallart", "dekorasi", "alami"] },
-];
+interface UIProduct {
+  id: number;
+  name: string;
+  category: string;
+  price: number;
+  priceOriginal?: number; // shown with strikethrough when sale
+  img: string;
+  href: string;
+  isNew?: boolean;
+}
 
 interface Message {
   id: string;
   role: "user" | "ai";
   text: string;
-  products?: typeof PRODUCTS;
+  products?: UIProduct[];
   timestamp: Date;
 }
 
-/* ──────────────────────────────────────
-   AI Engine (Frontend rule-based + placeholder for real API)
-──────────────────────────────────────── */
-function getAIResponse(input: string): { text: string; products?: typeof PRODUCTS } {
-  const q = input.toLowerCase();
-
-  const matched = PRODUCTS.filter((p) =>
-    p.keywords.some((k) => q.includes(k)) ||
-    p.name.toLowerCase().split(" ").some((w) => q.includes(w)) ||
-    p.category.toLowerCase().includes(q)
-  );
-
-  /* ── Greeting ── */
-  if (/^(halo|hai|hi|hello|selamat|good)/.test(q)) {
-    return {
-      text: "Halo! Saya *Maison AI*, asisten desain interior Anda. Saya siap membantu Anda menemukan furnitur dan dekorasi sempurna. Ceritakan tentang ruangan atau gaya yang Anda inginkan! ✨",
-    };
-  }
-
-  /* ── Budget ── */
-  if (q.includes("murah") || q.includes("budget") || q.includes("terjangkau") || q.includes("harga")) {
-    const budget = PRODUCTS.filter((p) => p.price < 3000000).slice(0, 3);
-    return {
-      text: "Ini rekomendasi produk terbaik dengan harga di bawah Rp 3.000.000 — kualitas premium, tetap sesuai anggaran Anda:",
-      products: budget,
-    };
-  }
-
-  /* ── Room-specific ── */
-  if (q.includes("ruang tamu") || q.includes("living room") || q.includes("tamu")) {
-    const living = PRODUCTS.filter((p) => [1, 2, 4, 6].includes(p.id));
-    return {
-      text: "Untuk ruang tamu yang elegan dan nyaman, saya rekomendasikan kombinasi berikut — pilih yang sesuai dengan estetika Anda:",
-      products: living,
-    };
-  }
-
-  if (q.includes("kamar") || q.includes("bedroom") || q.includes("tidur")) {
-    const bedroom = PRODUCTS.filter((p) => [3, 7, 8].includes(p.id));
-    return {
-      text: "Untuk kamar tidur yang menjadi sanctuary pribadi Anda, pertimbangkan pilihan berikut:",
-      products: bedroom,
-    };
-  }
-
-  if (q.includes("dapur") || q.includes("makan") || q.includes("dining")) {
-    const dining = PRODUCTS.filter((p) => [5, 4].includes(p.id));
-    return {
-      text: "Untuk ruang makan yang stylish dan fungsional, berikut rekomendasi saya:",
-      products: dining,
-    };
-  }
-
-  /* ── Style ── */
-  if (q.includes("minimalis") || q.includes("japandi") || q.includes("modern")) {
-    const minimal = PRODUCTS.filter((p) => [1, 7, 8, 9].includes(p.id));
-    return {
-      text: "Gaya minimalis Japandi sangat populer saat ini — clean lines, natural materials, dan ketenangan visual. Ini pilihan yang cocok:",
-      products: minimal,
-    };
-  }
-
-  if (q.includes("alami") || q.includes("natural") || q.includes("rotan") || q.includes("kayu")) {
-    const natural = PRODUCTS.filter((p) => [5, 6, 9].includes(p.id));
-    return {
-      text: "Sentuhan alami membawa kehangatan dan ketenangan ke rumah. Koleksi berbahan rotan dan kayu kami:",
-      products: natural,
-    };
-  }
-
-  if (q.includes("mewah") || q.includes("luxury") || q.includes("premium") || q.includes("elegan")) {
-    const luxury = PRODUCTS.filter((p) => [2, 4, 5].includes(p.id));
-    return {
-      text: "Untuk sentuhan kemewahan di setiap sudut rumah Anda, pilihan terbaik kami:",
-      products: luxury,
-    };
-  }
-
-  /* ── Specific category match ── */
-  if (matched.length > 0) {
-    return {
-      text: `Saya menemukan ${matched.length} produk yang cocok dengan yang Anda cari:`,
-      products: matched.slice(0, 3),
-    };
-  }
-
-  /* ── Fallback ── */
-  const random = PRODUCTS.sort(() => Math.random() - 0.5).slice(0, 3);
+/* Map backend ChatProduct → UIProduct used by ChatProductCard */
+function mapProduct(p: ChatProduct): UIProduct {
+  const onSale = p.salePrice != null && p.salePrice > 0 && p.salePrice < p.price;
   return {
-    text: "Ceritakan lebih lanjut tentang ruangan atau gaya yang Anda inginkan, dan saya akan memberikan rekomendasi yang lebih personal. Sementara itu, ini beberapa produk populer kami:",
-    products: random,
+    id: p.id,
+    name: p.name,
+    category: p.category?.name ?? "Produk",
+    price: onSale ? (p.salePrice as number) : p.price,
+    priceOriginal: onSale ? p.price : undefined,
+    img: p.imageUrl && p.imageUrl.length > 0 ? p.imageUrl : "/product-chair.png",
+    href: `/product/${p.id}`,
+    isNew: Boolean(p.isNew),
   };
 }
 
@@ -126,7 +47,7 @@ function formatRp(n: number) {
 /* ──────────────────────────────────────
    PRODUCT CARD in Chat
 ──────────────────────────────────────── */
-function ChatProductCard({ product }: { product: typeof PRODUCTS[0] }) {
+function ChatProductCard({ product }: { product: UIProduct }) {
   return (
     <Link
       href={product.href}
@@ -176,9 +97,26 @@ function ChatProductCard({ product }: { product: typeof PRODUCTS[0] }) {
               textTransform: "uppercase",
               color: "#C4713A",
               marginBottom: "0.15rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem",
             }}
           >
-            {product.category}
+            <span>{product.category}</span>
+            {product.isNew && (
+              <span
+                style={{
+                  fontSize: "0.55rem",
+                  background: "#1A1714",
+                  color: "#FAF8F5",
+                  padding: "0.05rem 0.35rem",
+                  letterSpacing: "0.12em",
+                  borderRadius: "2px",
+                }}
+              >
+                BARU
+              </span>
+            )}
           </div>
           <div
             style={{
@@ -193,8 +131,21 @@ function ChatProductCard({ product }: { product: typeof PRODUCTS[0] }) {
           >
             {product.name}
           </div>
-          <div style={{ fontSize: "0.78rem", color: "#6B6560", fontWeight: 500 }}>
-            {formatRp(product.price)}
+          <div style={{ display: "flex", alignItems: "baseline", gap: "0.45rem" }}>
+            <span style={{ fontSize: "0.78rem", color: "#6B6560", fontWeight: 500 }}>
+              {formatRp(product.price)}
+            </span>
+            {product.priceOriginal && (
+              <span
+                style={{
+                  fontSize: "0.68rem",
+                  color: "#B8AFA0",
+                  textDecoration: "line-through",
+                }}
+              >
+                {formatRp(product.priceOriginal)}
+              </span>
+            )}
           </div>
         </div>
         {/* Arrow */}
@@ -339,33 +290,47 @@ export default function AIChatbot() {
   }, [open]);
 
   const sendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
 
     const userMsg: Message = {
       id: Date.now().toString(),
       role: "user",
-      text: text.trim(),
+      text: trimmed,
       timestamp: new Date(),
     };
+
+    // Snapshot history BEFORE appending the new user message
+    const history: ChatMessageDTO[] = messages
+      .filter((m) => m.id !== "welcome" && m.id !== "welcome-new")
+      .map((m) => ({ role: m.role, text: m.text }));
 
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setTyping(true);
 
-    // Simulate AI thinking delay
-    await new Promise((r) => setTimeout(r, 900 + Math.random() * 600));
-
-    const response = getAIResponse(text);
-    const aiMsg: Message = {
-      id: (Date.now() + 1).toString(),
-      role: "ai",
-      text: response.text,
-      products: response.products,
-      timestamp: new Date(),
-    };
-
-    setTyping(false);
-    setMessages((prev) => [...prev, aiMsg]);
+    try {
+      const response = await sendChatMessage(trimmed, history);
+      const aiMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "ai",
+        text: response.text,
+        products: response.products.map(mapProduct),
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, aiMsg]);
+    } catch (error) {
+      console.error("Chat error:", error);
+      const errMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "ai",
+        text: "Maaf, asisten saya sedang mengalami kendala. Silakan coba lagi sesaat.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errMsg]);
+    } finally {
+      setTyping(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
