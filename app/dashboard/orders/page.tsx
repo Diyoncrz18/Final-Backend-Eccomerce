@@ -3,13 +3,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../../components/NavbarUser";
-import { getMyOrders, getAuthToken, getImageUrl } from "../../../services/api";
-
-function getStoredUser() {
-  if (typeof window === 'undefined') return { name: "Guest", email: "", tier: "Bronze", points: 0 };
-  const saved = localStorage.getItem('user');
-  return saved ? JSON.parse(saved) : { name: "Guest", email: "", tier: "Bronze", points: 0 };
-}
+import { getMyOrders, getStoredUser, getImageUrl } from "../../../services/api";
 
 /* ─────────── Types ─────────── */
 type OrderStatus = "menunggu" | "dikemas" | "dikirim" | "selesai" | "dibatalkan";
@@ -21,10 +15,37 @@ interface Order {
   cancelReason?: string;
 }
 
-/* ─────────── Default Data ─────────── */
-const ORDER_MOCK: Order[] = [];
+interface ApiProduct {
+  name?: string;
+  imageUrl?: string;
+}
 
-const ORDERS = ORDER_MOCK;
+interface ApiOrderItem {
+  id?: number;
+  product?: ApiProduct;
+  productName?: string;
+  productImage?: string;
+  variant?: string;
+  quantity?: number;
+  salePrice?: number;
+  unitPrice?: number;
+  price?: number;
+}
+
+interface ApiOrder {
+  id?: number;
+  orderNumber?: string;
+  createdAt?: string;
+  status?: string;
+  orderItems?: ApiOrderItem[];
+  items?: ApiOrderItem[];
+  total?: number;
+  shippingFee?: number;
+  shippingCost?: number;
+  trackingNumber?: string;
+  courier?: string;
+  estimatedDelivery?: string;
+}
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: string }> = {
   menunggu:    { label: "Menunggu Pembayaran", color: "#B45309", bg: "rgba(180,83,9,0.08)" },
@@ -42,6 +63,50 @@ const TRACKING_STEPS = [
 ];
 
 function formatRp(n: number) { return "Rp " + n.toLocaleString("id-ID"); }
+
+function toOrderStatus(status?: string): OrderStatus {
+  switch ((status || "").toUpperCase()) {
+    case "DIKEMAS":
+      return "dikemas";
+    case "DIKIRIM":
+      return "dikirim";
+    case "SELESAI":
+      return "selesai";
+    case "DIBATALKAN":
+      return "dibatalkan";
+    default:
+      return "menunggu";
+  }
+}
+
+function mapApiOrder(source: unknown): Order {
+  const o = source as ApiOrder;
+  const orderItems = Array.isArray(o.orderItems) ? o.orderItems : Array.isArray(o.items) ? o.items : [];
+
+  return {
+    id: o.orderNumber || String(o.id),
+    date: o.createdAt ? new Date(o.createdAt).toLocaleDateString("id-ID") : "-",
+    status: toOrderStatus(o.status),
+    items: orderItems.map((item, idx) => {
+      const product = item.product || {};
+      const price = Number(item.salePrice ?? item.unitPrice ?? item.price ?? 0);
+      return {
+        id: Number(item.id ?? idx),
+        name: product.name || item.productName || "Produk",
+        variant: item.variant || "-",
+        qty: Number(item.quantity || 1),
+        price,
+        img: product.imageUrl || item.productImage || "",
+        imageUrl: product.imageUrl || item.productImage || "",
+      };
+    }),
+    total: Number(o.total || 0),
+    shipping: Number(o.shippingFee ?? o.shippingCost ?? 0),
+    trackingNo: o.trackingNumber,
+    courier: o.courier,
+    estimasi: o.estimatedDelivery,
+  };
+}
 
 function OrderStatusBadge({ status }: { status: OrderStatus }) {
   const cfg = STATUS_CONFIG[status];
@@ -108,36 +173,14 @@ export default function OrdersPage() {
   const user = getStoredUser();
   const [activeFilter, setActiveFilter] = useState<"semua" | OrderStatus>("semua");
   const [expandedTracking, setExpandedTracking] = useState<string | null>(null);
-  const [orders, setOrders] = useState<Order[]>(ORDER_MOCK);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadOrders() {
       try {
-        const token = getAuthToken();
-        if (token) {
-          const data = await getMyOrders(0, 20);
-          if (data && data.length > 0) {
-            setOrders(data.map((o: any) => ({
-              id: o.orderNumber,
-              date: new Date(o.createdAt).toLocaleDateString("id-ID"),
-              status: o.status?.toLowerCase() || "menunggu",
-              items: o.items?.map((item: any, idx: number) => ({
-                id: idx,
-                name: item.productName || "Product",
-                variant: item.variant || "-",
-                qty: item.quantity || 1,
-                price: item.price || 0,
-                img: item.productImage || "/product-chair.png"
-              })) || [],
-              total: o.total || 0,
-              shipping: o.shippingCost || 0,
-              trackingNo: o.trackingNumber,
-              courier: o.courier,
-              estimasi: o.estimatedDelivery
-            })));
-          }
-        }
+        const data = await getMyOrders(0, 20);
+        setOrders(data.map(mapApiOrder));
       } catch (error) {
         console.error("Failed to load orders:", error);
       } finally {
@@ -302,7 +345,6 @@ export default function OrdersPage() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
             {filtered.map(order => {
-              const cfg = STATUS_CONFIG[order.status];
               const isExpanded = expandedTracking === order.id;
               return (
                 <div key={order.id} style={{ background: "var(--white)", border: "1px solid var(--stone-light)", overflow: "hidden" }}>
@@ -451,28 +493,33 @@ export default function OrdersPage() {
                         </button>
                       )}
                       {order.status === "selesai" && (
-                        <button style={{
-                          padding: "0.6rem 1.25rem", background: "none",
-                          border: "1px solid var(--stone-light)",
+                        <Link
+                          href={`/dashboard/orders/${encodeURIComponent(order.id)}#review`}
+                          style={{
+                            padding: "0.6rem 1.25rem", background: "none",
+                            border: "1px solid var(--stone-light)",
+                            fontFamily: "var(--font-body)", fontSize: "0.75rem", fontWeight: 500,
+                            letterSpacing: "0.08em", textTransform: "uppercase",
+                            color: "var(--charcoal)", cursor: "pointer", transition: "all 0.2s ease",
+                            display: "inline-block",
+                          }}
+                          onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--charcoal)")}
+                          onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--stone-light)")}>
+                          Tulis Ulasan
+                        </Link>
+                      )}
+                      <Link
+                        href={order.status === "dibatalkan" ? "/koleksi" : `/dashboard/orders/${encodeURIComponent(order.id)}`}
+                        style={{
+                          padding: "0.6rem 1.25rem",
+                          background: order.status === "dibatalkan" ? "var(--charcoal)" : "var(--copper)",
+                          border: "none", color: "var(--cream)",
                           fontFamily: "var(--font-body)", fontSize: "0.75rem", fontWeight: 500,
                           letterSpacing: "0.08em", textTransform: "uppercase",
-                          color: "var(--charcoal)", cursor: "pointer", transition: "all 0.2s ease",
+                          cursor: "pointer", transition: "opacity 0.2s ease", display: "inline-block",
                         }}
-                        onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.borderColor = "var(--charcoal)")}
-                        onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.borderColor = "var(--stone-light)")}>
-                          Tulis Ulasan
-                        </button>
-                      )}
-                      <Link href="/koleksi" style={{
-                        padding: "0.6rem 1.25rem",
-                        background: order.status === "dibatalkan" ? "var(--charcoal)" : "var(--copper)",
-                        border: "none", color: "var(--cream)",
-                        fontFamily: "var(--font-body)", fontSize: "0.75rem", fontWeight: 500,
-                        letterSpacing: "0.08em", textTransform: "uppercase",
-                        cursor: "pointer", transition: "opacity 0.2s ease", display: "inline-block",
-                      }}
-                      onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.opacity = "0.85")}
-                      onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.opacity = "1")}>
+                        onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.opacity = "0.85")}
+                        onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.opacity = "1")}>
                         {order.status === "dibatalkan" ? "Beli Lagi" : "Detail"}
                       </Link>
                     </div>

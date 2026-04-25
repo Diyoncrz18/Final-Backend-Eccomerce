@@ -3,27 +3,23 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import NavbarUser from "../../components/NavbarUser";
-import { getWishlist, removeFromWishlist, getAuthToken, fetchProducts, getImageUrl } from "../../../services/api";
-
-function getStoredUser() {
-  if (typeof window === 'undefined') return { name: "Guest", email: "", tier: "Bronze", points: 0 };
-  const saved = localStorage.getItem('user');
-  return saved ? JSON.parse(saved) : { name: "Guest", email: "", tier: "Bronze", points: 0 };
-}
+import { getWishlist, removeFromWishlist, fetchProducts, getImageUrl, getStoredUser } from "../../../services/api";
 
 interface WishItem {
   id: number; name: string; category: string; price: number; origPrice?: number;
   img: string; imageUrl?: string; rating: number; stock: number; addedDate: string;
 }
 
-const WISHLIST_DEFAULT: WishItem[] = [];
-
-const RECOMMENDED_MOCK: any[] = [
-  { id: 1, name: "Bouclé Armchair", price: 6400000, img: "/product-chair.png", imageUrl: "/product-chair.png", rating: 4.9 },
-  { id: 2, name: "Olive Linen Sofa", price: 12500000, img: "/product-sofa.png", imageUrl: "/product-sofa.png", rating: 4.8 },
-  { id: 7, name: "Ceramic Statement Vase", price: 1350000, img: "/product-ceramic-vase.png", imageUrl: "/product-ceramic-vase.png", rating: 4.9 },
-  { id: 6, name: "Rattan Pendant Lamp", price: 2750000, img: "/product-lamp.png", imageUrl: "/product-lamp.png", rating: 4.8 },
-];
+interface ProductLike {
+  id: number;
+  name: string;
+  category?: string | { name?: string };
+  price?: number;
+  salePrice?: number | null;
+  imageUrl?: string;
+  rating?: number;
+  stock?: number;
+}
 
 function formatRp(n: number) { return "Rp " + n.toLocaleString("id-ID"); }
 function Stars({ n }: { n: number }) {
@@ -38,45 +34,42 @@ function Stars({ n }: { n: number }) {
 
 export default function WishlistPage() {
   const user = getStoredUser();
-  const [items, setItems] = useState<WishItem[]>(WISHLIST_DEFAULT);
+  const [items, setItems] = useState<WishItem[]>([]);
   const [hovered, setHovered] = useState<number | null>(null);
   const [hoveredRec, setHoveredRec] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState("terbaru");
   const [addedToCart, setAddedToCart] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [recommended, setRecommended] = useState(RECOMMENDED_MOCK);
+  const [recommended, setRecommended] = useState<WishItem[]>([]);
 
   useEffect(() => {
     async function loadData() {
       try {
-        const token = getAuthToken();
-        if (token) {
-          const wishlistData = await getWishlist();
-          if (wishlistData && wishlistData.length > 0) {
-            setItems(wishlistData.map((item: any, idx: number) => ({
-              id: item.id || idx,
-              name: item.name,
-              category: item.category || "Uncategorized",
-              price: item.price || 0,
-              img: item.imageUrl || "/product-chair.png",
-              rating: 4.5,
-              stock: 10,
-              addedDate: new Date().toLocaleDateString("id-ID")
-            })));
-          }
-        }
+        const wishlistData = await getWishlist();
+        setItems(wishlistData.map((item, idx) => ({
+          id: item.id || idx,
+          name: item.name,
+          category: item.category || "",
+          price: Number(item.salePrice ?? item.price ?? 0),
+          img: item.imageUrl || "",
+          imageUrl: item.imageUrl || "",
+          rating: Number(item.rating ?? 0),
+          stock: Number(item.stock ?? 0),
+          addedDate: "-",
+        })));
         
-        // Load recommendations
-        const products = await fetchProducts(0, 4);
-        if (products.length > 0) {
-          setRecommended(products.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            price: p.price,
-            img: p.imageUrl || "/product-chair.png",
-            rating: p.rating || 4.5
-          })));
-        }
+        const products = await fetchProducts(0, 4) as ProductLike[];
+        setRecommended(products.map((p) => ({
+          id: p.id,
+          name: p.name,
+          category: typeof p.category === "object" ? p.category?.name || "" : p.category || "",
+          price: Number(p.salePrice ?? p.price ?? 0),
+          img: p.imageUrl || "",
+          imageUrl: p.imageUrl || "",
+          rating: Number(p.rating ?? 0),
+          stock: Number(p.stock ?? 0),
+          addedDate: "-",
+        })));
       } catch (error) {
         console.error("Failed to load wishlist:", error);
       } finally {
@@ -87,10 +80,7 @@ export default function WishlistPage() {
   }, []);
 
   const removeItem = async (id: number) => {
-    const token = getAuthToken();
-    if (token) {
-      await removeFromWishlist(id);
-    }
+    await removeFromWishlist(id);
     setItems(prev => prev.filter(i => i.id !== id));
   };
 
@@ -154,7 +144,11 @@ export default function WishlistPage() {
 
       <div className="container-main" style={{ paddingTop: "2.5rem", paddingBottom: "5rem" }}>
 
-        {items.length === 0 ? (
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "4rem 0" }}>
+            <p>Loading wishlist...</p>
+          </div>
+        ) : items.length === 0 ? (
           /* ── Empty State ── */
           <div style={{ textAlign: "center", padding: "6rem 2rem", background: "var(--white)", border: "1px solid var(--stone-light)" }}>
             <div style={{ fontSize: "3rem", marginBottom: "1.25rem", opacity: 0.3 }}>♡</div>

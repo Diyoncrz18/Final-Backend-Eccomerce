@@ -1,60 +1,33 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import NavbarUser from "../../components/NavbarUser";
 import { updateUserProfile, getStoredUser as getStoredUserAPI } from "../../../services/api";
 
-const DEFAULT_USER = {
-  name: "Budi Santoso",
-  email: "budi@email.com",
-  phone: "+62 812 3456 7890",
-  tier: "Gold Member",
-  points: 2450,
-  joinDate: "Maret 2024",
-  avatar: null as string | null,
-  gender: "Laki-laki",
-  birthdate: "1990-05-15",
-};
-
 function getStoredUser() {
-  if (typeof window === 'undefined') return DEFAULT_USER;
-  const saved = localStorage.getItem('user');
-  return saved ? { ...DEFAULT_USER, ...JSON.parse(saved) } : DEFAULT_USER;
+  return getStoredUserAPI();
 }
 
-const ADDRESSES = [
-  {
-    id: 1,
-    label: "Rumah",
-    recipient: "Budi Santoso",
-    phone: "+62 812 3456 7890",
-    address: "Jl. Kuningan Mulia No. 12, RT 004/RW 003",
-    city: "Jakarta Selatan",
-    province: "DKI Jakarta",
-    postal: "12980",
-    isPrimary: true,
-  },
-  {
-    id: 2,
-    label: "Kantor",
-    recipient: "Budi Santoso",
-    phone: "+62 812 3456 7890",
-    address: "Gedung Sudirman Plaza, Lantai 18, Jl. Jenderal Sudirman Kav. 29",
-    city: "Jakarta Pusat",
-    province: "DKI Jakarta",
-    postal: "10350",
-    isPrimary: false,
-  },
-];
+const ADDRESSES: Array<{
+  id: number;
+  label: string;
+  recipient: string;
+  phone: string;
+  address: string;
+  city: string;
+  province: string;
+  postal: string;
+  isPrimary: boolean;
+}> = [];
 
 type Section = "profil" | "alamat" | "keamanan" | "notifikasi";
 
 export default function ProfilePage() {
-  const user = getStoredUser();
+  const [user, setUser] = useState(getStoredUser());
   const [activeSection, setActiveSection] = useState<Section>("profil");
   const [editMode, setEditMode] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [editAddress, setEditAddress] = useState<number | null>(null);
+  const [, setEditAddress] = useState<number | null>(null);
   const [addNewAddress, setAddNewAddress] = useState(false);
   const [notifs, setNotifs] = useState({
     order: true,
@@ -67,9 +40,9 @@ export default function ProfilePage() {
   const [formData, setFormData] = useState({
     name: user.name,
     email: user.email,
-    phone: user.phone,
-    gender: user.gender,
-    birthdate: user.birthdate,
+    phone: user.phone || "",
+    gender: user.gender || "",
+    birthdate: user.birthdate || "",
   });
 
   const NAV_ITEMS: { key: Section; label: string; icon: React.ReactNode }[] = [
@@ -177,7 +150,7 @@ export default function ProfilePage() {
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="var(--copper)" stroke="none">
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                 </svg>
-                <p style={{ fontSize: "0.65rem", color: "var(--copper)", letterSpacing: "0.12em" }}>{user?.tier || "Bronze"}</p>
+                <p style={{ fontSize: "0.65rem", color: "var(--copper)", letterSpacing: "0.12em" }}>{user?.tier || "-"}</p>
               </div>
             </div>
 
@@ -215,7 +188,7 @@ export default function ProfilePage() {
               </div>
               <div>
                 <p style={{ fontSize: "0.65rem", color: "var(--stone)", marginBottom: "0.1rem" }}>Member sejak</p>
-                <p style={{ fontSize: "0.78rem", color: "var(--charcoal)", fontWeight: 500 }}>{user?.joinDate || "Sekarang"}</p>
+                <p style={{ fontSize: "0.78rem", color: "var(--charcoal)", fontWeight: 500 }}>{user?.joinDate || "-"}</p>
               </div>
             </div>
           </div>
@@ -312,6 +285,7 @@ export default function ProfilePage() {
                           outline: "none", width: "100%", maxWidth: "420px", cursor: "pointer",
                         }}
                       >
+                        <option value="">Belum diisi</option>
                         <option value="Laki-laki">Laki-laki</option>
                         <option value="Perempuan">Perempuan</option>
                         <option value="Tidak disebutkan">Tidak disebutkan</option>
@@ -329,7 +303,7 @@ export default function ProfilePage() {
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="var(--copper)" stroke="none">
                           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                         </svg>
-                        <p style={{ fontSize: "0.72rem", color: "var(--copper)", fontWeight: 600, letterSpacing: "0.08em" }}>{user?.tier || "Bronze"}</p>
+                        <p style={{ fontSize: "0.72rem", color: "var(--copper)", fontWeight: 600, letterSpacing: "0.08em" }}>{user?.tier || "-"}</p>
                       </div>
                       <Link href="/dashboard/rewards" style={{ fontSize: "0.7rem", color: "var(--stone)", borderBottom: "1px dotted var(--stone-light)", paddingBottom: "1px" }}>
                         Lihat rewards →
@@ -342,7 +316,7 @@ export default function ProfilePage() {
                 {editMode && (
                   <div style={{ display: "flex", gap: "0.75rem", marginTop: "1rem", justifyContent: "flex-end" }}>
                     <button
-                      onClick={() => { setEditMode(false); setFormData({ name: user.name, email: user.email, phone: user.phone, gender: user.gender, birthdate: user.birthdate }); }}
+                      onClick={() => { setEditMode(false); setFormData({ name: user.name, email: user.email, phone: user.phone || "", gender: user.gender || "", birthdate: user.birthdate || "" }); }}
                       style={{ padding: "0.7rem 1.75rem", background: "transparent", border: "1px solid var(--stone-light)", color: "var(--charcoal)", fontFamily: "var(--font-body)", fontSize: "0.78rem", letterSpacing: "0.08em", cursor: "pointer" }}
                     >
                       Batal
@@ -350,9 +324,22 @@ export default function ProfilePage() {
                     <button
                       onClick={async () => {
                         try {
-                          const result = await updateUserProfile({ name: formData.name, phone: formData.phone });
+                          const result = await updateUserProfile({
+                            name: formData.name,
+                            phone: formData.phone,
+                            gender: formData.gender,
+                            birthdate: formData.birthdate,
+                          });
                           if (result.success) {
-                            localStorage.setItem('user', JSON.stringify({ ...user, name: formData.name, phone: formData.phone }));
+                            const updatedUser = {
+                              ...user,
+                              name: formData.name,
+                              phone: formData.phone,
+                              gender: formData.gender,
+                              birthdate: formData.birthdate,
+                            };
+                            setUser(updatedUser);
+                            localStorage.setItem('user', JSON.stringify(updatedUser));
                           }
                         } catch (error) {
                           console.error("Failed to update profile:", error);
@@ -396,6 +383,14 @@ export default function ProfilePage() {
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  {ADDRESSES.length === 0 && (
+                    <div style={{ background: "var(--white)", border: "1px solid var(--stone-light)", padding: "2rem", color: "var(--stone)", textAlign: "center" }}>
+                      <p style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem", color: "var(--charcoal)", marginBottom: "0.25rem" }}>
+                        Belum ada alamat tersimpan
+                      </p>
+                      <p style={{ fontSize: "0.82rem" }}>Alamat akan tampil di sini setelah tersimpan di database.</p>
+                    </div>
+                  )}
                   {ADDRESSES.map(addr => (
                     <div
                       key={addr.id}
@@ -570,29 +565,9 @@ export default function ProfilePage() {
                   <div style={{ padding: "1.25rem 1.75rem", borderBottom: "1px solid var(--stone-light)" }}>
                     <p style={{ fontWeight: 600, fontSize: "0.88rem", color: "var(--charcoal)" }}>Sesi Aktif</p>
                   </div>
-                  {[
-                    { device: "Chrome – Windows 11", location: "Jakarta, Indonesia", time: "Sekarang", current: true },
-                    { device: "Safari – iPhone 15", location: "Jakarta, Indonesia", time: "2 jam yang lalu", current: false },
-                  ].map((s, i, arr) => (
-                    <div key={i} style={{ padding: "1rem 1.75rem", borderBottom: i < arr.length - 1 ? "1px solid var(--stone-light)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-                        <div style={{ width: "34px", height: "34px", borderRadius: "50%", background: s.current ? "rgba(22,163,74,0.08)" : "var(--bone)", border: `1px solid ${s.current ? "rgba(22,163,74,0.2)" : "var(--stone-light)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={s.current ? "#16A34A" : "var(--stone)"} strokeWidth="1.5">
-                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p style={{ fontSize: "0.82rem", color: "var(--charcoal)", fontWeight: 500, marginBottom: "0.1rem" }}>{s.device}</p>
-                          <p style={{ fontSize: "0.7rem", color: "var(--stone)" }}>{s.location} · {s.time}</p>
-                        </div>
-                      </div>
-                      {s.current ? (
-                        <span style={{ fontSize: "0.65rem", color: "#16A34A", fontWeight: 600, letterSpacing: "0.08em" }}>Sesi Ini</span>
-                      ) : (
-                        <button style={{ fontSize: "0.7rem", color: "#DC2626", background: "none", border: "none", cursor: "pointer", letterSpacing: "0.06em" }}>Keluar</button>
-                      )}
-                    </div>
-                  ))}
+                  <div style={{ padding: "1.25rem 1.75rem", color: "var(--stone)", fontSize: "0.8rem" }}>
+                    Data sesi aktif belum tersedia dari database.
+                  </div>
                 </div>
 
                 {/* Danger zone */}

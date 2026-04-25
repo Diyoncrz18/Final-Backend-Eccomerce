@@ -2,27 +2,37 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import NavbarUser from "../../components/NavbarUser";
-import { getAuthToken, getCurrentUser } from "../../../services/api";
+import { fetchDashboard, getStoredUser, getVouchers, type DashboardData } from "../../../services/api";
 
-const DEFAULT_USER = { name: "Budi Santoso", email: "budi@email.com", tier: "Gold Member", points: 2450 };
-
-function getStoredUser() {
-  if (typeof window === 'undefined') return DEFAULT_USER;
-  const saved = localStorage.getItem('user');
-  return saved ? JSON.parse(saved) : DEFAULT_USER;
-}
+type RewardUser = ReturnType<typeof getStoredUser> & { joinDate?: string; pointsNext?: number };
+type DashboardOrder = DashboardData["recentOrders"][number];
+type RewardHistoryItem = { date: string; desc: string; type: "earn" | "redeem" | "bonus"; pts: number };
+type RedeemOption = { id: number; title: string; desc: string; pts: number };
 
 function formatRp(n: number) { return "Rp " + n.toLocaleString("id-ID"); }
 
-const POINT_HISTORY = [
-  { date: "18 Apr 2025", desc: "Pembelian MSN-20250418-001", type: "earn", pts: 976 },
-  { date: "15 Apr 2025", desc: "Pembelian MSN-20250415-002", type: "earn", pts: 1250 },
-  { date: "10 Apr 2025", desc: "Penukaran Diskon 10%",       type: "redeem", pts: -500 },
-  { date: "8 Apr 2025",  desc: "Pembelian MSN-20250408-003", type: "earn", pts: 480 },
-  { date: "28 Mar 2025", desc: "Pembelian MSN-20250328-004", type: "earn", pts: 980 },
-  { date: "15 Mar 2025", desc: "Bonus Ulang Tahun Member",   type: "bonus", pts: 300 },
-  { date: "5 Mar 2025",  desc: "Penukaran Gratis Ongkir",    type: "redeem", pts: -150 },
-];
+function formatJoinDate(value?: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+}
+
+function formatDate(value?: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function orderToPointHistory(order: DashboardOrder): RewardHistoryItem {
+  return {
+    date: formatDate(order.createdAt),
+    desc: `Pembelian ${order.orderNumber}`,
+    type: "earn",
+    pts: Math.floor(Number(order.total || 0) / 10000),
+  };
+}
 
 const REDEEM_SVG: Record<number, React.ReactNode> = {
   1: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--copper)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
@@ -46,16 +56,6 @@ const EARN_WAYS = [
   { title: "Ajak Teman",           desc: "+200 poin per referral berhasil" },
   { title: "Bonus Ulang Tahun",    desc: "+300 poin di bulan ulang tahun Anda" },
 ];
-
-const REDEEM_OPTIONS = [
-  { id: 1, title: "Voucher Diskon Rp 50.000", desc: "Potongan harga langsung tanpa minimum belanja.", pts: 500 },
-  { id: 2, title: "Voucher Gratis Ongkir",    desc: "Bebas ongkir hingga Rp 100.000 ke seluruh Indonesia.", pts: 750 },
-  { id: 3, title: "Diskon 10% (Katalog Baru)",desc: "Berlaku khusus untuk produk koleksi terbaru.", pts: 1000 },
-  { id: 4, title: "Voucher Diskon Rp 250.000",desc: "Potongan harga untuk pembelian minimal Rp 2.500.000.", pts: 2000 },
-  { id: 5, title: "Exclusive Gift Box",        desc: "Set lilin aromaterapi & reed diffuser Maison.", pts: 3500 },
-  { id: 6, title: "Akses Early Sale (VIP)",    desc: "Akses H-1 sebelum publik untuk promosi tahunan.", pts: 5000 },
-];
-
 
 const TIER_BENEFITS: Record<string, { regular: string; gold: string; platinum: string }[]> = {
   benefits: [
@@ -81,13 +81,41 @@ export default function RewardsPage() {
   const [redeeming, setRedeeming] = useState<number | null>(null);
   const [redeemed, setRedeemed] = useState<Set<number>>(new Set());
   const [activeTab, setActiveTab] = useState<"semua" | "earn" | "redeem">("semua");
-  const [user, setUser] = useState(getStoredUser());
+  const [user, setUser] = useState<RewardUser>(getStoredUser());
+  const [pointHistory, setPointHistory] = useState<RewardHistoryItem[]>([]);
+  const [redeemOptions, setRedeemOptions] = useState<RedeemOption[]>([]);
+
+  useEffect(() => {
+    async function loadRewards() {
+      const [dashboard, vouchers] = await Promise.all([fetchDashboard(), getVouchers()]);
+
+      if (dashboard) {
+        setUser({ ...dashboard.user, joinDate: dashboard.user.joinDate });
+        setPointHistory(
+          dashboard.recentOrders
+            .filter(order => order.statusCode === "done")
+            .map(orderToPointHistory)
+        );
+      }
+
+      setRedeemOptions(vouchers.map(voucher => ({
+        id: voucher.id,
+        title: voucher.code,
+        desc: voucher.discountType === "PERCENT"
+          ? `Diskon ${voucher.discountValue}% untuk transaksi memenuhi syarat.`
+          : `Potongan ${formatRp(Number(voucher.discountValue))} untuk transaksi memenuhi syarat.`,
+        pts: Number(voucher.pointsCost || 0),
+      })));
+    }
+
+    void loadRewards();
+  }, []);
 
   const currentPts  = user?.points || 0;
   const nextTier    = TIER_THRESHOLDS.find(t => currentPts < t.max && currentPts >= t.min);
   const nextTierObj = nextTier?.name === "Gold" ? TIER_THRESHOLDS[2] : null; // next = Platinum
   const ptsToNext   = nextTierObj ? nextTierObj.min - currentPts : 0;
-  const progress    = Math.min(((currentPts - 1000) / (5000 - 1000)) * 100, 100); // Gold→Platinum
+  const progress    = Math.max(0, Math.min(((currentPts - 1000) / (5000 - 1000)) * 100, 100)); // Gold to Platinum
 
   const handleRedeem = (id: number, pts: number) => {
     if (pts > currentPts) return;
@@ -98,7 +126,7 @@ export default function RewardsPage() {
     }, 1200);
   };
 
-  const filteredHistory = POINT_HISTORY.filter(h =>
+  const filteredHistory = pointHistory.filter(h =>
     activeTab === "semua" ? true : h.type === (activeTab === "earn" ? "earn" : "redeem") || (activeTab === "earn" && h.type === "bonus")
   );
 
@@ -147,7 +175,7 @@ export default function RewardsPage() {
                   {user?.name}
                 </p>
                 <p style={{ fontSize: "0.78rem", color: "rgba(245,240,232,0.5)", marginBottom: "2rem" }}>
-                  Member sejak Maret 2024
+                  Member sejak {formatJoinDate(user?.joinDate)}
                 </p>
                 {/* Tier badge */}
                 <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", background: "rgba(196,113,58,0.15)", border: "1px solid rgba(196,113,58,0.3)", padding: "0.5rem 1.25rem" }}>
@@ -229,10 +257,16 @@ export default function RewardsPage() {
                 Gunakan Poin Anda
               </h2>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem" }} className="redeem-grid">
-                {REDEEM_OPTIONS.map(opt => {
+                {redeemOptions.length === 0 && (
+                  <div style={{ gridColumn: "1 / -1", background: "var(--white)", border: "1px solid var(--stone-light)", padding: "1.5rem", color: "var(--stone)", fontSize: "0.82rem" }}>
+                    Belum ada voucher reward aktif dari database.
+                  </div>
+                )}
+                {redeemOptions.map(opt => {
                   const canAfford = currentPts >= opt.pts;
                   const isRedeemed = redeemed.has(opt.id);
                   const isLoading  = redeeming === opt.id;
+                  const iconKey = ((opt.id - 1) % 6) + 1;
                   return (
                     <div key={opt.id} style={{
                       background: "var(--white)", border: `1px solid ${isRedeemed ? "var(--copper)" : "var(--stone-light)"}`,
@@ -245,7 +279,7 @@ export default function RewardsPage() {
                         display: "flex", alignItems: "center", justifyContent: "center",
                         marginBottom: "0.75rem",
                       }}>
-                        {REDEEM_SVG[opt.id]}
+                        {REDEEM_SVG[iconKey]}
                       </div>
                       <p style={{ fontWeight: 600, fontSize: "0.85rem", color: "var(--charcoal)", marginBottom: "0.2rem" }}>{opt.title}</p>
                       <p style={{ fontSize: "0.72rem", color: "var(--stone)", marginBottom: "0.75rem", lineHeight: 1.5 }}>{opt.desc}</p>

@@ -3,83 +3,64 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import NavbarUser from "../components/NavbarUser";
-import { getMyOrders, fetchProducts, getAuthToken, getLocalCart, getImageUrl } from "../../services/api";
+import { fetchDashboard, getImageUrl, type DashboardData, type DashboardStats } from "../../services/api";
 
-/* ─────────────── Default Data ─────────────── */
-const DEFAULT_USER = {
-  name: "Guest",
-  email: "",
-  tier: "Bronze",
-  points: 0,
-  pointsNext: 1000,
-  joinDate: new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" }),
+type DashboardUser = DashboardData["user"];
+type ApiDashboardOrder = DashboardData["recentOrders"][number];
+type ApiDashboardProduct = DashboardData["recommendations"][number];
+
+interface OrderCard {
+  id: number;
+  orderNumber: string;
+  product: string;
+  status: string;
+  statusCode: string;
+  date: string;
+  img?: string | null;
+  price: string;
+  eta?: string | null;
+}
+
+interface ProductCard {
+  id: number;
+  name: string;
+  price: string;
+  img?: string | null;
+  tag?: string | null;
+  rating: number;
+  inWishlist: boolean;
+}
+
+const EMPTY_STATS: DashboardStats = {
+  totalOrders: 0,
+  activeOrders: 0,
+  wishlistCount: 0,
+  rewardPoints: 0,
 };
-
-const DEFAULT_ORDERS: any[] = [];
-
-const ORDER_MOCK: any[] = [
-  {
-    id: "MSN-20250418",
-    product: "Marble Side Table",
-    status: "Dalam Pengiriman",
-    statusCode: "shipping",
-    date: "18 Apr 2025",
-    img: "/product-marble-table.png",
-    price: "Rp 4.800.000",
-    eta: "21 Apr 2025",
-  },
-  {
-    id: "MSN-20250409",
-    product: "Velvet Accent Chair",
-    status: "Selesai",
-    statusCode: "done",
-    date: "9 Apr 2025",
-    img: "/product-velvet-chair.png",
-    price: "Rp 7.200.000",
-    eta: null,
-  },
-  {
-    id: "MSN-20250401",
-    product: "Rattan Wall Panel",
-    status: "Selesai",
-    statusCode: "done",
-    date: "1 Apr 2025",
-    img: "/product-rattan-wall.png",
-    price: "Rp 2.100.000",
-    eta: null,
-  },
-];
-
-const DEFAULT_WISHLIST = [
-  { id: 1, name: "Olive Linen Sofa", price: 12500000, img: "/product-sofa.png", tag: "Terlaris" },
-  { id: 2, name: "Travertine Coffee Table", price: 8900000, img: "/product-table.png", tag: null },
-  { id: 3, name: "Ceramic Statement Vase", price: 1350000, img: "/product-ceramic-vase.png", tag: "Baru" },
-  { id: 4, name: "Rattan Pendant Lamp", price: 2750000, img: "/product-lamp.png", tag: null },
-];
-
-const RECOMMENDATIONS_MOCK = [
-  { id: 1, name: "Bouclé Armchair", price: 6400000, img: "/product-chair.png", tag: "Best Seller", rating: 4.9 },
-  { id: 2, name: "Oak Dining Table", price: 9800000, img: "/product-table.png", tag: null, rating: 4.8 },
-  { id: 3, name: "Japandi Floor Lamp", price: 1850000, img: "/product-lamp.png", tag: "New", rating: 5.0 },
-  { id: 4, name: "Linen Throw Pillow Set", price: 680000, img: "/product-ceramic-vase.png", tag: null, rating: 4.7 },
-  { id: 5, name: "Stone Side Table", price: 3200000, img: "/product-marble-table.png", tag: "Diskon 15%", rating: 4.8 },
-  { id: 6, name: "Wabi-Sabi Vase Set", price: 1100000, img: "/product-rattan-wall.png", tag: null, rating: 4.9 },
-];
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; dot: string; step: number }> = {
   pending: { color: "#92400E", bg: "rgba(217,119,6,0.1)", dot: "#D97706", step: 1 },
   packing: { color: "#1D4ED8", bg: "rgba(59,130,246,0.1)", dot: "#3B82F6", step: 2 },
   shipping: { color: "#6D28D9", bg: "rgba(109,40,217,0.1)", dot: "#7C3AED", step: 3 },
   done: { color: "#065F46", bg: "rgba(16,185,129,0.1)", dot: "#10B981", step: 4 },
+  cancelled: { color: "#991B1B", bg: "rgba(220,38,38,0.1)", dot: "#DC2626", step: 0 },
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Menunggu",
+  packing: "Dikemas",
+  shipping: "Dalam Pengiriman",
+  done: "Selesai",
+  cancelled: "Dibatalkan",
 };
 
 /* ─────────────── Helpers ─────────────── */
 function greeting() {
   const h = new Date().getHours();
-  if (h < 11) return ["Selamat Pagi"];
-  if (h < 15) return ["Selamat Siang"];
-  if (h < 18) return ["Selamat Sore"];
-  return ["Selamat Malam"];
+  if (h < 11) return "Selamat Pagi";
+  if (h < 15) return "Selamat Siang";
+  if (h < 18) return "Selamat Sore";
+  return "Selamat Malam";
 }
 
 function Stars({ n }: { n: number }) {
@@ -101,90 +82,110 @@ function formatPrice(n: number) {
   return "Rp " + n.toLocaleString("id-ID");
 }
 
+function formatDate(value?: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function formatJoinDate(value?: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+}
+
+function mapOrder(order: ApiDashboardOrder): OrderCard {
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    product: order.productName || "Pesanan",
+    status: STATUS_LABELS[order.statusCode] || order.status,
+    statusCode: order.statusCode || "pending",
+    date: formatDate(order.createdAt),
+    img: order.productImage,
+    price: formatPrice(Number(order.total || 0)),
+    eta: order.eta,
+  };
+}
+
+function mapProduct(product: ApiDashboardProduct): ProductCard {
+  return {
+    id: product.id,
+    name: product.name,
+    price: formatPrice(Number(product.salePrice ?? product.price ?? 0)),
+    img: product.imageUrl,
+    tag: product.tag,
+    rating: Number(product.rating || 0),
+    inWishlist: Boolean(product.inWishlist),
+  };
+}
+
 export default function DashboardPage() {
-  // First declare all useState hooks (order matters!)
-  const [greet, emoji] = greeting();
+  const greet = greeting();
   const [activeTab, setActiveTab] = useState<"semua" | "aktif" | "selesai">("semua");
   const [wishHover, setWishHover] = useState<number | null>(null);
   const [recHover, setRecHover] = useState<number | null>(null);
-  const [mounted, setMounted] = useState(false);
-  const [user, setUser] = useState(DEFAULT_USER);
-  const [orders, setOrders] = useState<any[]>(ORDER_MOCK);
-  const [wishlist, setWishlist] = useState<any[]>(DEFAULT_WISHLIST);
-  const [recommendations, setRecommendations] = useState<any[]>(RECOMMENDATIONS_MOCK);
+  const [user, setUser] = useState<DashboardUser | null>(null);
+  const [orders, setOrders] = useState<OrderCard[]>([]);
+  const [wishlist, setWishlist] = useState<ProductCard[]>([]);
+  const [recommendations, setRecommendations] = useState<ProductCard[]>([]);
+  const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Now use the state values
-  const currentOrders = orders.length > 0 ? orders : ORDER_MOCK;
-  const currentWishlist = wishlist.length > 0 ? wishlist : DEFAULT_WISHLIST;
-  const currentRecs = recommendations.length > 0 ? recommendations : RECOMMENDATIONS_MOCK;
+  useEffect(() => {
+    window.history.scrollRestoration = "manual";
+    window.scrollTo(0, 0);
 
-  // Create USER alias for compatibility
-  const USER = user || DEFAULT_USER;
+    return () => {
+      window.history.scrollRestoration = "auto";
+    };
+  }, []);
 
   useEffect(() => {
     async function loadData() {
       try {
-        const token = getAuthToken();
-        if (token) {
-          // Get user from localStorage
-          const savedUser = localStorage.getItem('user');
-          if (savedUser) {
-            const parsed = JSON.parse(savedUser);
-            setUser({
-              ...parsed,
-              points: parsed.points || 0,
-              pointsNext: parsed.points ? parsed.points * 2 : 1000,
-              joinDate: parsed.joinDate || new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" }),
-            });
-          }
-          
-          // Get orders from API
-          const orderData = await getMyOrders(0, 10);
-          if (orderData && orderData.length > 0) {
-            setOrders(orderData.map((o: any) => ({
-              id: o.orderNumber,
-              product: o.items?.[0]?.productName || "Product",
-              status: o.status,
-              statusCode: o.status?.toLowerCase() || "pending",
-              date: new Date(o.createdAt).toLocaleDateString("id-ID"),
-              img: o.items?.[0]?.productImage || "/product-table.png",
-              price: "Rp " + (o.total || 0).toLocaleString("id-ID"),
-              eta: o.status === 'DIKIRIM' ? "3-5 hari" : null,
-            })));
-          }
+        setError(null);
+        const dashboard = await fetchDashboard();
+
+        if (!dashboard) {
+          setError("Data dashboard belum bisa dimuat. Silakan login kembali atau coba lagi.");
+          return;
         }
-        
-        // Get products for recommendations
-        const products = await fetchProducts(0, 6);
-        if (products.length > 0) {
-          setRecommendations(products.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            price: p.price,
-            img: p.imageUrl || "/product-chair.png",
-            tag: p.isNew ? "Baru" : null,
-            rating: p.rating || 4.5,
-          })));
-        }
+
+        setUser({ ...dashboard.user, joinDate: formatJoinDate(dashboard.user.joinDate) });
+        setStats(dashboard.stats || EMPTY_STATS);
+        setOrders(dashboard.recentOrders.map(mapOrder));
+        setWishlist(dashboard.wishlist.map(mapProduct));
+        setRecommendations(dashboard.recommendations.map(mapProduct));
       } catch (error) {
         console.error("Failed to load dashboard data:", error);
+        setError("Terjadi kesalahan saat mengambil data dashboard.");
       } finally {
         setLoading(false);
-        const t = setTimeout(() => setMounted(true), 80);
-        return () => clearTimeout(t);
       }
     }
     loadData();
   }, []);
 
-  const ordersFiltered = orders.filter((o: any) =>
+  const ordersFiltered = orders.filter((o) =>
     activeTab === "semua" ? true
       : activeTab === "aktif" ? o.statusCode === "shipping" || o.statusCode === "packing"
         : o.statusCode === "done"
   );
 
-  const pct = Math.round((USER.points / USER.pointsNext) * 100);
+  const points = user?.points ?? stats.rewardPoints ?? 0;
+  const nextPoints = Math.max(user?.pointsNext || 1000, 1);
+  const pct = Math.min(100, Math.round((points / nextPoints) * 100));
+  const pointsRemaining = Math.max(nextPoints - points, 0);
+
+  const quickActions = [
+    { label: "Pesanan Saya", count: `${stats.activeOrders} Aktif`, href: "/dashboard/orders", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" /><path d="M16 3H8v4h8V3z" /></svg> },
+    { label: "Wishlist", count: `${stats.wishlistCount} Produk`, href: "/dashboard/wishlist", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg> },
+    { label: "Poin Saya", count: `${points.toLocaleString("id-ID")} Poin`, href: "/dashboard/rewards", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" /></svg> },
+  ];
 
   if (loading) {
     return (
@@ -194,14 +195,29 @@ export default function DashboardPage() {
     );
   }
 
+  if (!user) {
+    return (
+      <div style={{ minHeight: "100vh", background: "var(--bone)", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
+        <div style={{ background: "var(--white)", border: "1px solid var(--stone-light)", padding: "2rem", maxWidth: "420px", textAlign: "center" }}>
+          <p style={{ fontFamily: "var(--font-display)", fontSize: "1.35rem", color: "var(--charcoal)", marginBottom: "0.5rem" }}>
+            Dashboard belum tersedia
+          </p>
+          <p style={{ color: "var(--stone)", fontSize: "0.85rem", lineHeight: 1.6, marginBottom: "1.25rem" }}>
+            {error || "Silakan login untuk mengambil data dashboard dari database."}
+          </p>
+          <Link href="/login" style={{ color: "var(--copper)", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: "0.75rem" }}>
+            Login
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
         minHeight: "100vh",
         background: "var(--bone)",
-        opacity: mounted ? 1 : 0,
-        transform: mounted ? "translateY(0)" : "translateY(12px)",
-        transition: "opacity 0.5s ease, transform 0.5s ease",
       }}
     >
       <NavbarUser user={user} />
@@ -262,7 +278,6 @@ export default function DashboardPage() {
                   gap: "0.5rem",
                 }}
               >
-                <span>{emoji}</span>
                 {greet}
               </p>
 
@@ -278,7 +293,7 @@ export default function DashboardPage() {
               >
                 Halo,{" "}
                 <em style={{ fontStyle: "italic", color: "var(--copper)" }}>
-                  {USER.name.split(" ")[0]}
+                  {user.name.split(" ")[0]}
                 </em>
                 <br />
                 <span style={{ fontSize: "0.65em", color: "rgba(245,240,232,0.55)", fontStyle: "normal" }}>
@@ -431,7 +446,7 @@ export default function DashboardPage() {
                     marginBottom: "0.25rem",
                   }}
                 >
-                  {USER.tier}
+                  {user.tier}
                 </p>
                 <p
                   style={{
@@ -441,7 +456,7 @@ export default function DashboardPage() {
                     marginBottom: "1.5rem",
                   }}
                 >
-                  Member sejak {USER.joinDate}
+                  Member sejak {user.joinDate}
                 </p>
 
                 <div style={{ marginBottom: "1.25rem" }}>
@@ -463,7 +478,7 @@ export default function DashboardPage() {
                           lineHeight: 1,
                         }}
                       >
-                        {USER.points?.toLocaleString() || "0"}
+                        {points.toLocaleString("id-ID")}
                       </p>
                       <p
                         style={{
@@ -477,7 +492,7 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <p style={{ fontSize: "0.72rem", color: "rgba(245,240,232,0.45)" }}>
-                      / {(USER.pointsNext || 1000).toLocaleString()} Platinum
+                      / {nextPoints.toLocaleString("id-ID")} Platinum
                     </p>
                   </div>
 
@@ -508,7 +523,7 @@ export default function DashboardPage() {
                       textAlign: "right",
                     }}
                   >
-                    {(USER.pointsNext || 1000) - (USER.points || 0)} poin lagi ke Platinum
+                    {pointsRemaining.toLocaleString("id-ID")} poin lagi ke Platinum
                   </p>
                 </div>
 
@@ -548,11 +563,7 @@ export default function DashboardPage() {
             }}
             className="quick-actions-grid"
           >
-            {[
-              { label: "Pesanan Saya", count: "3 Aktif", href: "/dashboard/orders", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" /><path d="M16 3H8v4h8V3z" /></svg> },
-              { label: "Wishlist", count: "4 Produk", href: "/dashboard/wishlist", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg> },
-              { label: "Poin Saya", count: "2.450 Poin", href: "/dashboard/rewards", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" /></svg> },
-            ].map((item, i) => (
+            {quickActions.map((item, i) => (
               <Link
                 key={item.label}
                 href={item.href}
@@ -704,7 +715,7 @@ export default function DashboardPage() {
                         flexShrink: 0,
                       }}
                     >
-                      <Image src={getImageUrl(order.img)} alt={order.product} fill style={{ objectFit: "cover" }} />
+                      <Image src={getImageUrl(order.img || undefined)} alt={order.product} fill style={{ objectFit: "cover" }} />
                     </div>
 
                     {/* Info */}
@@ -853,7 +864,24 @@ export default function DashboardPage() {
             }}
             className="product-grid"
           >
-            {currentRecs.map((item: any) => (
+            {recommendations.length === 0 && (
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  padding: "3rem",
+                  textAlign: "center",
+                  background: "var(--white)",
+                  border: "1px solid var(--stone-light)",
+                  color: "var(--stone)",
+                }}
+              >
+                <p style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem", marginBottom: "0.25rem" }}>
+                  Belum ada rekomendasi
+                </p>
+                <p style={{ fontSize: "0.82rem" }}>Produk aktif dari database akan tampil di sini.</p>
+              </div>
+            )}
+            {recommendations.map((item) => (
               <Link
                 key={item.id}
                 href={`/product/${item.id}`}
@@ -880,7 +908,7 @@ export default function DashboardPage() {
                       overflow: "hidden",
                     }}
                   >
-                    <Image src={getImageUrl(item.img)} alt={item.name} fill style={{ objectFit: "cover", transition: "transform 0.5s ease" }} />
+                    <Image src={getImageUrl(item.img || undefined)} alt={item.name} fill style={{ objectFit: "cover", transition: "transform 0.5s ease" }} />
 
                     {/* Tags */}
                     {item.tag && (
@@ -1035,7 +1063,7 @@ export default function DashboardPage() {
                 paddingBottom: "2px",
               }}
             >
-              Lihat Semua ({currentWishlist.length})
+              Lihat Semua ({wishlist.length})
             </Link>
           </div>
 
@@ -1047,7 +1075,24 @@ export default function DashboardPage() {
             }}
             className="wishlist-grid"
           >
-            {currentWishlist.map((item: any) => (
+            {wishlist.length === 0 && (
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  padding: "3rem",
+                  textAlign: "center",
+                  background: "var(--white)",
+                  border: "1px solid var(--stone-light)",
+                  color: "var(--stone)",
+                }}
+              >
+                <p style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem", marginBottom: "0.25rem" }}>
+                  Wishlist masih kosong
+                </p>
+                <p style={{ fontSize: "0.82rem" }}>Produk yang disimpan dari database akan tampil di sini.</p>
+              </div>
+            )}
+            {wishlist.map((item) => (
               <Link
                 key={item.id}
                 href={`/product/${item.id}`}
@@ -1066,7 +1111,7 @@ export default function DashboardPage() {
                   }}
                 >
                   <div style={{ aspectRatio: "1/1", position: "relative", background: "var(--bone)", overflow: "hidden" }}>
-                    <Image src={getImageUrl(item.img)} alt={item.name} fill style={{ objectFit: "cover" }} />
+                    <Image src={getImageUrl(item.img || undefined)} alt={item.name} fill style={{ objectFit: "cover" }} />
                     {item.tag && (
                       <span
                         style={{
