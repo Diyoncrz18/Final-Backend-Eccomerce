@@ -1,8 +1,15 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { getAdminDisplayName, isAdmin, isAuthenticated, logout } from "../../services/api";
+import {
+  countPendingOrders,
+  countPendingReviews,
+  getAdminDisplayName,
+  isAdmin,
+  isAuthenticated,
+  logout,
+} from "../../services/api";
 
 const isBrowser = typeof window !== "undefined";
 
@@ -13,7 +20,7 @@ const NAV_GROUPS = [
     items: [
       { href: "/admin", label: "Overview", exact: true, icon: <GridIcon />, badge: null },
       { href: "/admin/produk", label: "Produk", exact: false, icon: <BoxIcon />, badge: null },
-      { href: "/admin/pesanan", label: "Pesanan", exact: false, icon: <OrderIcon />, badge: 8 },
+      { href: "/admin/pesanan", label: "Pesanan", exact: false, icon: <OrderIcon />, badge: null },
       { href: "/admin/pengguna", label: "Pengguna", exact: false, icon: <UserIcon />, badge: null },
     ],
   },
@@ -22,7 +29,7 @@ const NAV_GROUPS = [
     items: [
       { href: "/admin/voucher", label: "Voucher & Promo", exact: false, icon: <TagIcon />, badge: null },
       { href: "/admin/rewards", label: "Rewards & Poin", exact: false, icon: <StarIcon />, badge: null },
-      { href: "/admin/ulasan", label: "Ulasan", exact: false, icon: <ReviewIcon />, badge: 3 },
+      { href: "/admin/ulasan", label: "Ulasan", exact: false, icon: <ReviewIcon />, badge: null },
     ],
   },
   {
@@ -38,6 +45,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [dynamicBadges, setDynamicBadges] = useState<Record<string, number>>({});
 
   const isLoginPage = pathname === "/admin/login";
   const authChecked = isBrowser;
@@ -46,6 +54,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const isActive = (href: string, exact: boolean) =>
     exact ? pathname === href : pathname.startsWith(href);
+
+  /* Fetch real-time badge counts whenever admin navigates between pages.
+     This keeps Pesanan/Ulasan badges fresh after admin processes orders or approves reviews. */
+  useEffect(() => {
+    if (!isBrowser || isLoginPage || !isAuthed) return;
+    let active = true;
+    Promise.all([countPendingOrders(), countPendingReviews()])
+      .then(([orders, reviews]) => {
+        if (!active) return;
+        setDynamicBadges({
+          "/admin/pesanan": orders,
+          "/admin/ulasan": reviews,
+        });
+      })
+      .catch(() => { /* silent — leave badges empty on failure */ });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, isAuthed]);
 
   if (isBrowser && !isLoginPage && !isAuthed) {
     router.replace("/admin/login");
@@ -232,39 +258,48 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     <span style={{ color: active ? "#C4713A" : "currentColor", flexShrink: 0 }}>
                       {item.icon}
                     </span>
-                    {!collapsed && (
-                      <>
-                        <span style={{ flex: 1 }}>{item.label}</span>
-                        {item.badge !== null && (
-                          <span
-                            style={{
-                              background: "#C4713A",
-                              color: "#fff",
-                              fontSize: "0.6rem",
-                              padding: "0.1rem 0.45rem",
-                              borderRadius: "99px",
-                              fontWeight: 600,
-                              lineHeight: 1.5,
-                            }}
-                          >
-                            {item.badge}
-                          </span>
-                        )}
-                      </>
-                    )}
-                    {collapsed && item.badge !== null && (
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: "4px",
-                          right: "4px",
-                          width: "8px",
-                          height: "8px",
-                          borderRadius: "50%",
-                          background: "#C4713A",
-                        }}
-                      />
-                    )}
+                    {(() => {
+                      const dyn = dynamicBadges[item.href];
+                      const badgeValue = dyn !== undefined ? dyn : item.badge;
+                      const showBadge = badgeValue !== null && badgeValue > 0;
+                      return (
+                        <>
+                          {!collapsed && (
+                            <>
+                              <span style={{ flex: 1 }}>{item.label}</span>
+                              {showBadge && (
+                                <span
+                                  style={{
+                                    background: "#C4713A",
+                                    color: "#fff",
+                                    fontSize: "0.6rem",
+                                    padding: "0.1rem 0.45rem",
+                                    borderRadius: "99px",
+                                    fontWeight: 600,
+                                    lineHeight: 1.5,
+                                  }}
+                                >
+                                  {badgeValue}
+                                </span>
+                              )}
+                            </>
+                          )}
+                          {collapsed && showBadge && (
+                            <span
+                              style={{
+                                position: "absolute",
+                                top: "4px",
+                                right: "4px",
+                                width: "8px",
+                                height: "8px",
+                                borderRadius: "50%",
+                                background: "#C4713A",
+                              }}
+                            />
+                          )}
+                        </>
+                      );
+                    })()}
                   </Link>
                 );
               })}

@@ -1268,6 +1268,50 @@ export async function fetchAdminReviews(page = 0, size = 20) {
   }
 }
 
+/**
+ * Count of pending orders (status = MENUNGGU).
+ * Uses size=1 + totalElements to minimise payload — no need to fetch the rows themselves.
+ * Returns 0 on any failure (silent — used for sidebar badge).
+ */
+export async function countPendingOrders(): Promise<number> {
+  const headers = getAuthHeaders();
+  if (!headers) return 0;
+  try {
+    const response = await fetch(`${API_BASE_URL}/orders?status=MENUNGGU&page=0&size=1`, {
+      headers,
+      credentials: 'include',
+    });
+    if (!response.ok) return 0;
+    const data = await response.json();
+    return typeof data?.totalElements === 'number' ? data.totalElements : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Count of pending reviews (isApproved=false).
+ * Backend /reviews doesn't filter by approval status server-side, so fetch up to 200
+ * and count client-side. Sufficient for admin badge — pending reviews are rare.
+ * Returns 0 on any failure (silent — used for sidebar badge).
+ */
+export async function countPendingReviews(): Promise<number> {
+  const headers = getAuthHeaders();
+  if (!headers) return 0;
+  try {
+    const response = await fetch(`${API_BASE_URL}/reviews?page=0&size=200`, {
+      headers,
+      credentials: 'include',
+    });
+    if (!response.ok) return 0;
+    const data = await response.json();
+    const list: Array<{ isApproved?: boolean }> = Array.isArray(data?.content) ? data.content : [];
+    return list.filter(r => r.isApproved === false).length;
+  } catch {
+    return 0;
+  }
+}
+
 export async function updateReviewStatus(reviewId: number, status: string) {
   try {
     const token = getAuthToken();
