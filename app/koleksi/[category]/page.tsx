@@ -3,7 +3,7 @@ import { useState, useEffect, use } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import NavbarUser from "../../components/Navbar";
+import NavbarUser from "../../components/NavbarUser";
 import { fetchProducts, fetchCategories, getStoredUser, getImageUrl } from "../../../services/api";
 
 const CATEGORY_SLUG_MAP: Record<string, string> = {
@@ -333,9 +333,9 @@ export default function KoleksiCategoryPage({ params }: { params: Promise<{ cate
                     </p>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.4rem" }}>
                       <p style={{ fontSize: "0.88rem", fontWeight: 500, color: "var(--charcoal)" }}>
-                        {formatPrice(item.price)}
+                        {formatPrice(item.price ?? 0)}
                       </p>
-                      <Stars n={item.rating} />
+                      <Stars n={item.rating ?? 0} />
                     </div>
                   </div>
                 </div>

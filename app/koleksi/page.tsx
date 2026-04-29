@@ -328,9 +328,9 @@ export default function KoleksiPage() {
                     </p>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.4rem" }}>
                       <p style={{ fontSize: "0.88rem", fontWeight: 500, color: "var(--charcoal)" }}>
-                        {formatPrice(item.price)}
+                        {formatPrice(item.price ?? 0)}
                       </p>
-                      <Stars n={item.rating} />
+                      <Stars n={item.rating ?? 0} />
                     </div>
                   </div>
                 </div>
